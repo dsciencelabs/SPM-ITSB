@@ -38,8 +38,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
         return [
           ...base,
           { id: 'USER_MGMT', label: 'User Management', icon: Users },
-          { id: 'TEMPLATE_MGMT', label: 'Templates', icon: FileBox },
-          { id: 'MASTER_DATA', label: 'Master Data', icon: Database },
+          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox },
+          { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
           { id: 'REPORT', label: 'All Reports', icon: PieChart },
@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
   return (
     <div className="w-64 bg-slate-900 text-white flex flex-col h-screen fixed left-0 top-0 shadow-xl z-10">
       <div className="p-6 flex items-center gap-3 border-b border-slate-700">
-        <div className="bg-blue-500 p-2 rounded-lg">
+        <div className="bg-blue-50 p-2 rounded-lg">
           <ShieldCheck size={24} className="text-white" />
         </div>
         <div>

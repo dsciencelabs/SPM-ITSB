@@ -1,29 +1,214 @@
+
 import React, { useState } from 'react';
-import { AuditSession, AuditStatus } from '../types';
+import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, List, RotateCcw } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
+import { useAuth } from '../AuthContext';
 
 interface ReportsProps {
   audit: AuditSession | null;
+  audits: AuditSession[];
   onUpdateAudit: (audit: AuditSession) => void;
+  onSelectAudit: (audit: AuditSession) => void;
+  onBackToList?: () => void;
 }
 
-const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
+const Reports: React.FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit, onBackToList }) => {
   const { t } = useLanguage();
+  const { currentUser } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>(['Compliant', 'Non-Compliant', 'Observation']);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // New Status Filter for Repository View
+  const [repoStatusFilter, setRepoStatusFilter] = useState<'ALL' | AuditStatus>('ALL');
 
+  // --- LIST VIEW (REPOSITORY) ---
   if (!audit) {
+    // Filter audits based on role and status
+    const filteredAudits = audits.filter(a => {
+      // 1. Role Access Check
+      let allowed = false;
+      
+      if (!currentUser) return false;
+
+      switch (currentUser.role) {
+        case UserRole.SUPER_ADMIN:
+        case UserRole.ADMIN:
+          allowed = true;
+          break;
+        case UserRole.AUDITEE:
+          // STRICT: Only own department
+          allowed = a.department === currentUser.department;
+          break;
+        case UserRole.AUDITOR:
+          // Auditor sees assigned or all. For demo simplicity, allow all report access or filter.
+          // Given prompt "auditor dapat melihat... semua auditee", we allow all here or filter by assigned.
+          // Let's allow all for reports to enable cross-checking.
+          allowed = true;
+          break;
+        default:
+          allowed = false;
+      }
+      
+      if (!allowed) return false;
+
+      // 2. Status Filter Check
+      if (repoStatusFilter !== 'ALL' && a.status !== repoStatusFilter) {
+        return false;
+      }
+
+      // 3. Search Check
+      if (searchTerm) {
+        return a.department.toLowerCase().includes(searchTerm.toLowerCase()) || 
+               a.standard.toLowerCase().includes(searchTerm.toLowerCase());
+      }
+      
+      return true;
+    });
+
+    const isAdminOrAuditor = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.AUDITOR;
+
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-400">
-        <FileText size={48} className="mb-4 opacity-50" />
-        <p>{t('report.select')}</p>
+      <div className="p-8 max-w-7xl mx-auto animate-fade-in">
+        <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+           <div>
+             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+               <PieChart className="text-blue-600" /> {t('repo.title')}
+             </h2>
+             <p className="text-slate-500 mt-1">
+               {isAdminOrAuditor ? t('repo.access.admin') : t('repo.access.user')}
+             </p>
+           </div>
+           <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+             {/* Status Tabs */}
+             <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto">
+                <button 
+                  onClick={() => setRepoStatusFilter('ALL')}
+                  className={`flex-1 px-4 py-1.5 text-xs font-medium rounded-md transition-all ${repoStatusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  {t('repo.all')}
+                </button>
+                <button 
+                   onClick={() => setRepoStatusFilter(AuditStatus.COMPLETED)}
+                   className={`flex-1 px-4 py-1.5 text-xs font-medium rounded-md transition-all ${repoStatusFilter === AuditStatus.COMPLETED ? 'bg-green-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                   {t('repo.completed')}
+                </button>
+                <button 
+                   onClick={() => setRepoStatusFilter(AuditStatus.IN_PROGRESS)}
+                   className={`flex-1 px-4 py-1.5 text-xs font-medium rounded-md transition-all ${repoStatusFilter === AuditStatus.IN_PROGRESS ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                   {t('repo.progress')}
+                </button>
+             </div>
+
+             <div className="relative w-full md:w-64">
+               <input 
+                 type="text" 
+                 placeholder={t('repo.search')}
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+               />
+               <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+             </div>
+           </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
+              <tr>
+                <th className="px-6 py-4">{t('dash.th.dept')}</th>
+                <th className="px-6 py-4">{t('dash.th.std')}</th>
+                <th className="px-6 py-4">{t('dash.th.date')}</th>
+                <th className="px-6 py-4">{t('exec.progress')}</th>
+                <th className="px-6 py-4">{t('dash.th.status')}</th>
+                <th className="px-6 py-4 text-right">{t('mgmt.th.action')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredAudits.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    {t('repo.empty')}
+                  </td>
+                </tr>
+              ) : (
+                filteredAudits.map((a) => {
+                  // Calculate progress for list view
+                  const total = a.questions.length;
+                  const answered = a.questions.filter(q => q.compliance !== null).length;
+                  const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
+
+                  return (
+                    <tr key={a.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-6 py-4 font-medium text-slate-900">
+                        {a.department}
+                        <div className="text-xs text-slate-500 font-normal mt-0.5">{a.name}</div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-xs">
+                          {a.standard.split(' ')[0]}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {new Date(a.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-slate-100 rounded-full h-1.5">
+                            <div 
+                              className={`h-1.5 rounded-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                              style={{ width: `${progress}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-xs text-slate-500">{progress}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                         {a.status === AuditStatus.COMPLETED ? (
+                           <span className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 w-fit">
+                             <CheckCircle size={12} /> {t('repo.completed')}
+                           </span>
+                         ) : (
+                           <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
+                             <Clock size={12} /> {t('repo.progress')}
+                           </span>
+                         )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          onClick={() => onSelectAudit(a)}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline flex items-center gap-1 justify-end"
+                        >
+                          {t('repo.btn.view')} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1"/>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
+
+  // --- DETAIL VIEW ---
+  // Logic to check admin rights for Re-opening audit
+  const isAdmin = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
+
+  const handleReopenAudit = () => {
+    if (confirm(t('report.reopenConfirm'))) {
+        onUpdateAudit({ ...audit, status: AuditStatus.IN_PROGRESS });
+    }
+  };
 
   const handleGenerateAnalysis = async () => {
     setIsGenerating(true);
@@ -89,7 +274,7 @@ const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
     doc.text(`Compliant: ${compliantCount}  |  Non-Compliant: ${nonCompliantCount}  |  Observation: ${observationCount}`, 14, yPos);
     yPos += 12;
 
-    // AI Summary Section
+    // AI Summary Section (Note: Only if analysis exists)
     if (audit.aiSummary) {
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
@@ -101,23 +286,6 @@ const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
       const summaryLines = doc.splitTextToSize(audit.aiSummary, pageWidth - 28);
       doc.text(summaryLines, 14, yPos);
       yPos += (summaryLines.length * 5) + 8;
-    }
-
-    // AI Recommendations Section
-    if (audit.aiRecommendations && audit.aiRecommendations.length > 0) {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text(t('report.recommendations'), 14, yPos);
-      yPos += 6;
-      
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      audit.aiRecommendations.forEach((rec) => {
-        const recLines = doc.splitTextToSize(`• ${rec}`, pageWidth - 28);
-        doc.text(recLines, 14, yPos);
-        yPos += (recLines.length * 5) + 2;
-      });
-      yPos += 8;
     }
 
     // Table
@@ -153,6 +321,14 @@ const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
 
   return (
     <div className="p-8 max-w-6xl mx-auto animate-fade-in">
+      {/* Back Button */}
+      <button 
+        onClick={onBackToList}
+        className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-4 text-sm font-medium transition-colors"
+      >
+        <ChevronLeft size={16} /> {t('repo.all')}
+      </button>
+
       {/* Modern Header */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
@@ -178,9 +354,20 @@ const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
                 : 'bg-amber-50 text-amber-700 border-amber-100'
            }`}>
               {audit.status === AuditStatus.COMPLETED ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-              {audit.status.toUpperCase()}
+              {audit.status === AuditStatus.COMPLETED ? t('repo.completed') : t('repo.progress')}
            </span>
            
+           {/* Re-Open Button for Admins */}
+           {isAdmin && audit.status === AuditStatus.COMPLETED && (
+              <button 
+                onClick={handleReopenAudit}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm border border-amber-200"
+              >
+                <RotateCcw size={16} />
+                {t('report.btn.reopen')}
+              </button>
+           )}
+
            <button 
              onClick={handleExportPDF}
              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -206,6 +393,10 @@ const Reports: React.FC<ReportsProps> = ({ audit, onUpdateAudit }) => {
         </div>
       </div>
 
+      {/* AI Section - Optional since user asked to remove Gemini, but Reports still has logic for it. 
+          If prompt says "remove Gemini integration part" from Dashboard, but report generation is separate.
+          We will keep it functional but clean.
+      */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <Bot size={120} />

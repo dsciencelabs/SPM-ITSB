@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { AuditStandard, AuditSession, AuditStatus } from '../types';
+
+import React, { useState, useEffect } from 'react';
+import { AuditStandard, AuditSession, AuditStatus, AuditQuestion, UserRole } from '../types';
 import { generateChecklist } from '../services/geminiService';
-import { Sparkles, Loader2, ArrowRight } from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, Plus, Trash2, Edit3, Save, ArrowLeft, GripVertical, AlertTriangle, Database, Bot, Filter, User, Lock, UserX } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
+import { useAuth } from '../AuthContext';
+import { useMasterData } from '../MasterDataContext';
 
 interface NewAuditFormProps {
   onAuditCreated: (audit: AuditSession) => void;
@@ -11,30 +14,159 @@ interface NewAuditFormProps {
 
 const NewAuditForm: React.FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
   const { t } = useLanguage();
+  const { currentUser, users } = useAuth();
+  const { units, questions: masterQuestions } = useMasterData(); // Connect to Master Data
+  
+  // Form State
+  const [step, setStep] = useState<1 | 2>(1);
   const [department, setDepartment] = useState('');
-  const [standard, setStandard] = useState<AuditStandard>(AuditStandard.BAN_PT);
+  const [standard, setStandard] = useState<AuditStandard>(AuditStandard.PERMENDIKTISAINTEK_2025);
+  const [assignedAuditorId, setAssignedAuditorId] = useState(''); // Penugasan Auditor
+  
+  // Drafting State
   const [isLoading, setIsLoading] = useState(false);
+  const [draftQuestions, setDraftQuestions] = useState<AuditQuestion[]>([]);
+  const [sourceType, setSourceType] = useState<'MASTER' | 'AI'>('MASTER');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Delete Modal State
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; index: number | null }>({
+    open: false,
+    index: null
+  });
+
+  // --- ACCESS CONTROL CHECK ---
+  const isAuthorized = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
+  
+  if (!isAuthorized) {
+    return (
+      <div className="p-8 text-center max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-100 mt-10">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 mb-4">
+          <Lock size={32} />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Akses Ditolak</h2>
+        <p className="text-slate-500 mb-6">Hanya Administrator dan Super Admin yang berhak membuat Penugasan Audit baru dan menentukan instrumen.</p>
+        <button onClick={onCancel} className="bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900">
+          Kembali ke Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  // 1. Logic: Filter Units based on Selected Standard
+  const getFilteredUnits = () => {
+    // Permendiktisaintek applies to everyone, so show all units
+    if (standard === AuditStandard.PERMENDIKTISAINTEK_2025) {
+      return units;
+    }
+
+    return units.filter(unit => {
+      const f = (unit.faculty || '').toUpperCase();
+      const n = (unit.name || '').toUpperCase();
+
+      if (standard === AuditStandard.LAM_TEKNIK) {
+        return f.includes('TEKNIK') || f.includes('FTSP') || f.includes('PERENCANAAN');
+      }
+      if (standard === AuditStandard.LAM_INFOKOM) {
+        return f.includes('DIGITAL') || f.includes('BISNIS') || f.includes('FDDB') || n.includes('INFORMATIKA');
+      }
+      if (standard === AuditStandard.BAN_PT) {
+        // Vokasi usually BAN-PT, plus Institution/Biro levels
+        return f.includes('VOKASI') || f.includes('FV') || unit.type === 'Yayasan' || unit.type === 'Pimpinan Tinggi' || unit.type === 'Biro/Lembaga';
+      }
+      return true;
+    });
+  };
+
+  const filteredUnits = getFilteredUnits();
+  
+  // 2. Logic: Get Valid Auditors (Exclude Conflict of Interest)
+  // Auditor cannot be from the same department as the selected Auditee
+  const activeAuditors = users
+    .filter(u => {
+      // Must be active
+      if (u.status !== 'Active') return false;
+      
+      // CONFLICT CHECK: Auditor Department cannot match Selected Department
+      // Ensuring strictly that an Auditor cannot audit their own department (Jeruk makan Jeruk)
+      if (department && u.department === department) return false;
+
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Effect: Reset assignedAuditorId if the selected auditor becomes invalid due to department change
+  useEffect(() => {
+    if (assignedAuditorId) {
+       const currentAuditor = users.find(u => u.id === assignedAuditorId);
+       // If auditor exists but is now from the same department as selected, unassign them
+       if (currentAuditor && currentAuditor.department === department) {
+         setAssignedAuditorId('');
+       }
+    }
+  }, [department, users, assignedAuditorId]);
+
+  // 3. Logic: Auto-select Standard when Department is chosen
+  useEffect(() => {
     if (!department) return;
+
+    const selectedUnit = units.find(u => u.name === department);
+    if (selectedUnit) {
+      const f = (selectedUnit.faculty || '').toUpperCase();
+      
+      if (f.includes('TEKNIK') || f.includes('FTSP')) {
+        setStandard(AuditStandard.LAM_TEKNIK);
+      } else if (f.includes('DIGITAL') || f.includes('BISNIS') || f.includes('FDDB')) {
+        setStandard(AuditStandard.LAM_INFOKOM);
+      } else if (f.includes('VOKASI') || f.includes('FV')) {
+        setStandard(AuditStandard.BAN_PT);
+      } 
+    }
+  }, [department, units]);
+
+  // Handler for manually clicking a Standard Card
+  const handleStandardClick = (newStd: AuditStandard) => {
+    setStandard(newStd);
+    setDepartment(''); 
+    setAssignedAuditorId(''); // Reset auditor when standard changes to be safe
+  };
+
+  // Step 1: Generate Initial List (Strictly from Master Data first)
+  const handleGenerateDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!department || !assignedAuditorId) {
+      alert("Mohon lengkapi Unit dan Auditor Penanggung Jawab.");
+      return;
+    }
 
     setIsLoading(true);
 
     try {
-      const questions = await generateChecklist(standard, department);
+      // 1. Strictly fetch from Master Data Context
+      const relevantMasterQuestions = masterQuestions.filter(q => q.standard === standard);
 
-      const newAudit: AuditSession = {
-        id: Date.now().toString(),
-        name: `Audit ${department} - ${new Date().getFullYear()}`,
-        department,
-        standard,
-        status: AuditStatus.IN_PROGRESS,
-        date: new Date().toISOString(),
-        questions,
-      };
+      if (relevantMasterQuestions.length > 0) {
+        // USE MASTER DATA (LOCKED MODE)
+        const mappedQuestions: AuditQuestion[] = relevantMasterQuestions.map(q => ({
+          id: q.id,
+          category: q.category,
+          questionText: q.text,
+          compliance: null,
+          evidence: "",
+          auditorNotes: ""
+        }));
+        
+        setDraftQuestions(mappedQuestions);
+        setSourceType('MASTER');
+        setStep(2);
+      } else {
+        // 2. Fallback to AI only if Master Data is completely empty for this standard
+        // This prevents accidentally using AI when a standard instrument exists
+        const questions = await generateChecklist(standard, department);
+        setDraftQuestions(questions);
+        setSourceType('AI');
+        setStep(2);
+      }
 
-      onAuditCreated(newAudit);
     } catch (error) {
       alert(t('new.error'));
     } finally {
@@ -42,91 +174,392 @@ const NewAuditForm: React.FC<NewAuditFormProps> = ({ onAuditCreated, onCancel })
     }
   };
 
+  // Step 2 Actions
+  const handleAddManualQuestion = () => {
+    const newId = `ADD.${draftQuestions.length + 1}`;
+    const newQuestion: AuditQuestion = {
+      id: newId,
+      category: 'Tambahan',
+      questionText: '',
+      compliance: null,
+      evidence: '',
+      auditorNotes: ''
+    };
+    setDraftQuestions([...draftQuestions, newQuestion]);
+  };
+
+  const promptDelete = (index: number) => {
+    setDeleteModal({ open: true, index });
+  };
+
+  const confirmDelete = () => {
+    if (deleteModal.index !== null) {
+      const updated = [...draftQuestions];
+      updated.splice(deleteModal.index, 1);
+      setDraftQuestions(updated);
+      setDeleteModal({ open: false, index: null });
+    }
+  };
+
+  const handleQuestionChange = (index: number, field: keyof AuditQuestion, value: string) => {
+    const updated = [...draftQuestions];
+    updated[index] = { ...updated[index], [field]: value };
+    setDraftQuestions(updated);
+  };
+
+  const handleFinalizeAudit = () => {
+    // Validate
+    if (draftQuestions.length === 0) {
+      alert("Daftar pertanyaan tidak boleh kosong.");
+      return;
+    }
+    
+    const newAudit: AuditSession = {
+      id: Date.now().toString(),
+      name: `Audit ${department} - ${new Date().getFullYear()}`,
+      department,
+      standard,
+      status: AuditStatus.IN_PROGRESS,
+      date: new Date().toISOString(),
+      questions: draftQuestions,
+      assignedAuditorId: assignedAuditorId // Assigning the Auditor
+    };
+
+    onAuditCreated(newAudit);
+  };
+
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-8 max-w-5xl mx-auto animate-fade-in relative">
       <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-        <div className="p-8 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-3 mb-2">
+        
+        {/* Header */}
+        <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <div className="flex items-center gap-3">
             <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-              <Sparkles size={24} />
+              {step === 1 ? <Sparkles size={24} /> : <Edit3 size={24} />}
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">{t('new.title')}</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">
+                {step === 1 ? t('new.title') : t('new.editor.title')}
+              </h2>
+              <p className="text-slate-500 text-sm">
+                {step === 1 ? "Konfigurasi Penugasan Audit (Admin Only)" : "Pastikan pertanyaan sesuai dengan instrumen baku."}
+              </p>
+            </div>
           </div>
-          <p className="text-slate-500 ml-12">
-            {t('new.subtitle')}
-          </p>
+          
+          {/* Step Indicator */}
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</div>
+            <div className="w-8 h-1 bg-slate-200">
+              <div className={`h-full bg-blue-600 transition-all ${step === 2 ? 'w-full' : 'w-0'}`}></div>
+            </div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              {t('new.label.dept')}
-            </label>
-            <input
-              type="text"
-              required
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              placeholder={t('new.placeholder.dept')}
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              {t('new.label.std')}
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Object.values(AuditStandard).map((std) => (
-                <div
-                  key={std}
-                  onClick={() => setStandard(std)}
-                  className={`cursor-pointer rounded-xl p-4 border-2 transition-all ${
-                    standard === std
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${standard === std ? 'border-blue-500' : 'border-slate-300'}`}>
-                      {standard === std && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+        {/* STEP 1: CONFIGURATION */}
+        {step === 1 && (
+          <form onSubmit={handleGenerateDraft} className="p-8 space-y-8">
+            
+            {/* 1. STANDARD SELECTION */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-3">
+                1. Pilih Standar Instrumen (Wajib)
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.values(AuditStandard).map((std) => {
+                  const hasMasterData = masterQuestions.some(q => q.standard === std);
+                  
+                  return (
+                    <div
+                      key={std}
+                      onClick={() => handleStandardClick(std)}
+                      className={`cursor-pointer rounded-xl p-4 border-2 transition-all relative overflow-hidden ${
+                        standard === std
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${standard === std ? 'border-blue-500' : 'border-slate-300'}`}>
+                          {standard === std && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                        </div>
+                        {hasMasterData ? (
+                          <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                             <Database size={10} /> Instrumen Tersedia
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                             <Bot size={10} /> Auto-Gen (Darurat)
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-medium text-sm">{std}</span>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 2. DEPARTMENT SELECTION */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="block text-sm font-medium text-slate-700">
+                      2. Pilih Auditee (Unit/Prodi)
+                    </label>
+                    {standard && (
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
+                        <Filter size={10} /> Filtered
+                      </span>
+                    )}
                   </div>
-                  <span className="font-medium text-sm">{std}</span>
+                  
+                  <select
+                    required
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white"
+                  >
+                    <option value="">
+                      {filteredUnits.length === 0 
+                        ? "-- Tidak ada unit yang sesuai --" 
+                        : "-- Pilih Unit / Program Studi --"}
+                    </option>
+                    {filteredUnits.map(unit => (
+                      <option key={unit.id} value={unit.name}>
+                        [{unit.code}] {unit.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+
+                {/* 3. AUDITOR SELECTION (MANDATORY) */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    3. Penugasan Auditor (Semua User Aktif)
+                  </label>
+                  <div className="relative">
+                    <select
+                      required
+                      value={assignedAuditorId}
+                      onChange={(e) => setAssignedAuditorId(e.target.value)}
+                      className="w-full px-4 py-3 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                      disabled={!department}
+                    >
+                      <option value="">-- Pilih Auditor (Semua Nama) --</option>
+                      {activeAuditors.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} ({user.role})
+                        </option>
+                      ))}
+                    </select>
+                    <User size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                  </div>
+                  {department && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
+                      <UserX size={14} />
+                      <span><strong>Info:</strong> Auditor yang berasal dari departemen <strong>{department}</strong> tidak ditampilkan (Conflict of Interest).</span>
+                    </div>
+                  )}
+                </div>
+            </div>
+
+            <div className="pt-6 flex items-center justify-end gap-4 border-t border-slate-100 mt-6">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-6 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                {t('new.btn.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading || !department || !assignedAuditorId}
+                className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Memuat Instrumen...
+                  </>
+                ) : (
+                  <>
+                    {t('new.btn.next')}
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 2: EDITOR (Super Admin / Admin) */}
+        {step === 2 && (
+          <div className="flex flex-col h-[600px]">
+            {/* Toolbar */}
+            <div className="px-8 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                  sourceType === 'MASTER' 
+                    ? 'bg-green-50 text-green-700 border-green-100' 
+                    : 'bg-purple-50 text-purple-700 border-purple-100'
+                }`}>
+                  {sourceType === 'MASTER' ? <Database size={12} /> : <Bot size={12} />}
+                  {sourceType === 'MASTER' ? 'Sumber: Master Instrumen (Baku)' : 'Sumber: AI Generated'}
+                </div>
+                <span className="text-slate-300">|</span>
+                <div className="text-sm text-slate-500">
+                  <strong>{draftQuestions.length}</strong> Butir Pertanyaan
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleAddManualQuestion}
+                className="text-blue-600 hover:bg-blue-50 hover:text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-transparent hover:border-blue-200"
+              >
+                <Plus size={16} />
+                {t('new.btn.addManual')}
+              </button>
+            </div>
+
+            {/* Scrollable List */}
+            <div className="flex-1 overflow-y-auto p-8 bg-slate-50/30">
+               <div className="space-y-3">
+                 {draftQuestions.map((q, idx) => {
+                   // Determine if this question is from Master Data
+                   const isMasterItem = sourceType === 'MASTER' && !q.id.startsWith('ADD.');
+
+                   return (
+                     <div key={idx} className={`bg-white p-4 rounded-xl border shadow-sm hover:shadow-md transition-shadow group ${isMasterItem ? 'border-green-200/60' : 'border-slate-200'}`}>
+                       <div className="flex gap-4 items-start">
+                         <div className="pt-3 text-slate-300 cursor-move">
+                           <GripVertical size={20} />
+                         </div>
+                         
+                         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4">
+                            {/* ID & Category Inputs */}
+                            <div className="md:col-span-2">
+                               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">ID</label>
+                               <input 
+                                 type="text" 
+                                 value={q.id}
+                                 readOnly={isMasterItem} // Lock ID if Master
+                                 onChange={(e) => handleQuestionChange(idx, 'id', e.target.value)}
+                                 className={`w-full text-sm font-mono font-medium text-slate-700 border rounded px-2 py-1 outline-none ${isMasterItem ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`}
+                               />
+                            </div>
+                            <div className="md:col-span-3">
+                               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Category</label>
+                               <input 
+                                 type="text" 
+                                 value={q.category}
+                                 readOnly={isMasterItem} // Lock Category if Master
+                                 onChange={(e) => handleQuestionChange(idx, 'category', e.target.value)}
+                                 className={`w-full text-sm text-slate-700 border rounded px-2 py-1 outline-none ${isMasterItem ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`}
+                               />
+                            </div>
+                            
+                            {/* Question Text Input */}
+                            <div className="md:col-span-7 relative">
+                               <div className="flex justify-between mb-1">
+                                 <label className="block text-xs font-bold text-slate-400 uppercase">Question / Indicator</label>
+                                 {isMasterItem && (
+                                   <span className="text-[10px] text-green-600 bg-green-50 px-1.5 rounded flex items-center gap-0.5">
+                                     <Lock size={8} /> Instrumen Baku
+                                   </span>
+                                 )}
+                               </div>
+                               <textarea 
+                                 rows={2}
+                                 value={q.questionText}
+                                 readOnly={isMasterItem} // LOCK QUESTION TEXT IF FROM MASTER DATA
+                                 onChange={(e) => handleQuestionChange(idx, 'questionText', e.target.value)}
+                                 className={`w-full text-sm text-slate-800 rounded-lg px-3 py-2 outline-none resize-none ${
+                                   isMasterItem 
+                                     ? 'bg-slate-50 border border-transparent' 
+                                     : 'bg-white border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                 }`}
+                               />
+                            </div>
+                         </div>
+
+                         <div className="pt-6">
+                            {/* Allow deleting even master items if user really wants to remove them from THIS audit instance, 
+                                but visually warn them */}
+                            <button 
+                              onClick={() => promptDelete(idx)}
+                              className="text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors"
+                              title="Hapus Item"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                         </div>
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 border-t border-slate-200 bg-white flex justify-between items-center z-10">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="px-6 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <ArrowLeft size={16} />
+                {t('new.btn.back')}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleFinalizeAudit}
+                className="px-8 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                <Save size={18} />
+                {t('new.btn.finalize')}
+              </button>
             </div>
           </div>
+        )}
 
-          <div className="pt-6 flex items-center justify-end gap-4">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-6 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              disabled={isLoading}
-            >
-              {t('new.btn.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  {t('new.btn.generate')}
-                </>
-              ) : (
-                <>
-                  {t('new.btn.start')}
-                  <ArrowRight size={18} />
-                </>
-              )}
-            </button>
-          </div>
-        </form>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.open && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{t('new.del.title')}</h3>
+              <p className="text-sm text-slate-500">
+                {t('new.del.msg')}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setDeleteModal({ open: false, index: null })}
+                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+              >
+                {t('new.btn.cancel')}
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+              >
+                {t('new.del.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

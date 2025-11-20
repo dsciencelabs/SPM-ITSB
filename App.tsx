@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -9,13 +10,14 @@ import ManagementPlaceholder from './components/ManagementPlaceholder';
 import { AuditSession, ViewState, AuditStandard, AuditStatus, UserRole } from './types';
 import { LanguageProvider } from './LanguageContext';
 import { AuthProvider, useAuth } from './AuthContext';
+import { MasterDataProvider } from './MasterDataContext';
 
 // Mock Data for initial visualization
 const MOCK_AUDITS: AuditSession[] = [
   {
     id: '1',
     name: 'Audit S1 Informatika 2023',
-    department: 'S1 Teknik Informatika',
+    department: 'S1 - Informatika',
     standard: AuditStandard.LAM_INFOKOM,
     status: AuditStatus.COMPLETED,
     date: '2023-10-15T09:00:00Z',
@@ -25,20 +27,32 @@ const MOCK_AUDITS: AuditSession[] = [
   {
     id: '2',
     name: 'Audit S1 Perencanaan Wilayah 2024',
-    department: 'S1 Perencanaan Wilayah dan Kota',
+    department: 'S1 - Perencanaan Wilayah dan Kota',
     standard: AuditStandard.BAN_PT,
     status: AuditStatus.IN_PROGRESS,
     date: '2024-02-20T09:00:00Z',
+    assignedAuditorId: 'au-1', // Assigned to Dr. Budi Santoso
     questions: [
        {
          id: 'A.1',
          category: 'Tata Pamong',
          questionText: 'Apakah dokumen Renstra unit tersedia dan selaras dengan universitas?',
-         compliance: 'Non-Compliant',
-         evidence: '',
-         auditorNotes: 'Renstra belum disahkan oleh Dekan',
+         compliance: 'Non-Compliant', // Auditor Verdict
+         auditeeSelfAssessment: 'Compliant', // Auditee Claim
+         evidence: 'https://drive.google.com/file/d/renstra-draft.pdf',
+         auditorNotes: 'Renstra ada, tapi belum disahkan oleh Dekan (Perlu TTD).',
          actionPlan: 'Akan dilakukan revisi dan pengesahan',
          actionPlanDeadline: '2024-03-30'
+       },
+       {
+         id: 'A.2',
+         category: 'Tata Pamong',
+         questionText: 'Apakah struktur organisasi sesuai dengan statuta?',
+         compliance: null, // Not yet verified
+         auditeeSelfAssessment: 'Compliant',
+         evidence: 'https://drive.google.com/org-chart',
+         auditorNotes: '',
+         actionPlan: ''
        }
     ],
   }
@@ -93,6 +107,29 @@ const AppContent: React.FC = () => {
     setCurrentView('REPORT');
   };
 
+  // Navigation handler for Dashboard clicks
+  const handleViewAudit = (audit: AuditSession) => {
+    setActiveAuditId(audit.id);
+    
+    // Direct navigation based on status
+    if (audit.status === AuditStatus.COMPLETED) {
+      setCurrentView('REPORT');
+    } else {
+      setCurrentView('AUDIT_EXECUTION');
+    }
+  };
+
+  // Handler for Reports List selection
+  const handleReportSelect = (audit: AuditSession) => {
+    setActiveAuditId(audit.id);
+    // Stay in REPORT view
+  };
+
+  // Handler to go back to list (clear selection)
+  const handleClearSelection = () => {
+    setActiveAuditId(null);
+  };
+
   const getActiveAudit = () => audits.find(a => a.id === activeAuditId) || null;
 
   if (!currentUser) {
@@ -108,6 +145,7 @@ const AppContent: React.FC = () => {
           <Dashboard 
             audits={audits} 
             onCreateNew={() => setCurrentView('NEW_AUDIT')} 
+            onViewAudit={handleViewAudit}
           />
         );
       case 'NEW_AUDIT':
@@ -129,7 +167,10 @@ const AppContent: React.FC = () => {
         return (
           <Reports 
             audit={activeAudit} 
+            audits={audits}
             onUpdateAudit={handleUpdateAudit}
+            onSelectAudit={handleReportSelect}
+            onBackToList={handleClearSelection}
           />
         );
       case 'USER_MGMT':
@@ -139,7 +180,7 @@ const AppContent: React.FC = () => {
       case 'AUDIT_SCHEDULE':
         return <ManagementPlaceholder view={currentView} />;
       default:
-        return <Dashboard audits={audits} onCreateNew={() => setCurrentView('NEW_AUDIT')} />;
+        return <Dashboard audits={audits} onCreateNew={() => setCurrentView('NEW_AUDIT')} onViewAudit={handleViewAudit} />;
     }
   };
 
@@ -157,7 +198,9 @@ const App: React.FC = () => {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <AppContent />
+        <MasterDataProvider>
+          <AppContent />
+        </MasterDataProvider>
       </AuthProvider>
     </LanguageProvider>
   );

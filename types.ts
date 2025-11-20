@@ -1,8 +1,9 @@
+
 export enum AuditStandard {
-  BAN_PT = 'BAN-PT (9 Kriteria)',
-  LAM_TEKNIK = 'LAM TEKNIK',
-  LAM_INFOKOM = 'LAM INFOKOM',
-  PERMENDIKTISAINTEK_2025 = 'Permendiktisaintek No. 39/2025 (Prodi)'
+  PERMENDIKTISAINTEK_2025 = 'Permendiktisaintek No. 39/2025 (Semua Unit)',
+  LAM_TEKNIK = 'LAM TEKNIK (FTSP)',
+  LAM_INFOKOM = 'LAM INFOKOM (FDDB)',
+  BAN_PT = 'BAN-PT (Vokasi & Institusi)'
 }
 
 export enum AuditStatus {
@@ -21,19 +22,30 @@ export enum UserRole {
 export interface User {
   id: string;
   name: string;
+  username?: string; // Added for login/management
+  password?: string; // Added for management (demo)
   role: UserRole;
   department?: string; // For Auditee
+  status?: 'Active' | 'Inactive'; // Added for management
 }
 
 export interface AuditQuestion {
   id: string;
   category: string;
   questionText: string;
+  
+  // Auditor Final Decision (Verification)
   compliance: 'Compliant' | 'Non-Compliant' | 'Observation' | null;
+  
+  // Auditee Self Assessment (Claim)
+  auditeeSelfAssessment?: 'Compliant' | 'Non-Compliant' | 'Observation' | null;
+  
   evidence?: string;
   auditorNotes?: string;
-  // New fields for Auditee response
+  
+  // Auditee Response (Legacy/Additional text)
   auditeeResponse?: string;
+  
   actionPlan?: string;
   actionPlanDeadline?: string;
 }
