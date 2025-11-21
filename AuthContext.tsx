@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { createContext, useState, useContext, ReactNode, useEffect, FC } from 'react';
 import { User, UserRole } from './types';
 
 interface AuthContextType {
@@ -15,19 +15,34 @@ interface AuthContextType {
 
 // Initial Mock Data
 const INITIAL_USERS: User[] = [
-  { id: 'sa-1', name: 'Super Administrator', username: 'superadmin', role: UserRole.SUPER_ADMIN, status: 'Active' },
-  { id: 'ad-1', name: 'Admin Operasional', username: 'admin', role: UserRole.ADMIN, status: 'Active' },
-  { id: 'au-1', name: 'Dr. Budi Santoso', username: 'budi.auditor', role: UserRole.AUDITOR, department: 'S1 - Teknik Sipil', status: 'Active' },
-  { id: 'au-2', name: 'Ir. Siti Aminah', username: 'siti.auditor', role: UserRole.AUDITOR, department: 'S1 - Perencanaan Wilayah dan Kota', status: 'Active' },
-  { id: 'd-1', name: 'Kaprodi Informatika', username: 'kaprodi.if', role: UserRole.AUDITEE, department: 'S1 - Informatika', status: 'Active' },
-  { id: 'd-2', name: 'Kaprodi Teknik Sipil', username: 'kaprodi.ts', role: UserRole.AUDITEE, department: 'S1 - Teknik Sipil', status: 'Inactive' }
+  // Requested Super Admin
+  { id: 'sa-bakti', name: 'Bakti', username: 'Bakti', password: '123', role: UserRole.SUPER_ADMIN, status: 'Active' },
+  
+  { id: 'sa-1', name: 'Super Administrator', username: 'superadmin', password: '123', role: UserRole.SUPER_ADMIN, status: 'Active' },
+  { id: 'ad-1', name: 'Admin Operasional', username: 'admin', password: '123', role: UserRole.ADMIN, status: 'Active' },
+  
+  // LEAD AUDITOR (Sees ALL Audits)
+  { id: 'lead-1', name: 'Ketua Auditor', username: 'lead', password: '123', role: UserRole.AUDITOR_LEAD, status: 'Active' },
+  
+  // DEPT HEAD (Matches S1 - Informatika Audit)
+  { id: 'dept-1', name: 'Dekan FDDB', username: 'dekan', password: '123', role: UserRole.DEPT_HEAD, department: 'S1 - Informatika', status: 'Active' },
+
+  // AUDITORS (Cross-Unit assignment)
+  // au-1 is from Civil Eng, so he CAN audit Informatics (No conflict)
+  { id: 'au-1', name: 'Dr. Budi Santoso', username: 'budi.auditor', password: '123', role: UserRole.AUDITOR, department: 'S1 - Teknik Sipil', status: 'Active' },
+  { id: 'au-2', name: 'Ir. Siti Aminah', username: 'siti.auditor', password: '123', role: UserRole.AUDITOR, department: 'S1 - Perencanaan Wilayah dan Kota', status: 'Active' },
+  
+  // AUDITEES (Unit Owners)
+  { id: 'd-1', name: 'Kaprodi Informatika', username: 'kaprodi.if', password: '123', role: UserRole.AUDITEE, department: 'S1 - Informatika', status: 'Active' },
+  { id: 'd-2', name: 'Kaprodi Teknik Sipil', username: 'kaprodi.ts', password: '123', role: UserRole.AUDITEE, department: 'S1 - Teknik Sipil', status: 'Active' }
 ];
 
-const STORAGE_KEY = 'ami_users_v1';
+// Updated key to v3 to force reload of new initial users for the scenario
+const STORAGE_KEY = 'ami_users_v3';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Load users from local storage or use initial data

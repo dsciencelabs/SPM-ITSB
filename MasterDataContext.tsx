@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { createContext, useState, useContext, ReactNode, useEffect, FC } from 'react';
 import { AuditStandard } from './types';
 
 export interface Unit {
@@ -104,7 +104,7 @@ const INITIAL_QUESTIONS: MasterQuestion[] = [
 
 const STORAGE_KEY = 'ami_master_data_v3';
 
-export const MasterDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const MasterDataProvider: FC<{ children: ReactNode }> = ({ children }) => {
   // Units State
   const [units, setUnits] = useState<Unit[]>(() => {
     try {

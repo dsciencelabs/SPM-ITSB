@@ -15,7 +15,9 @@ export enum AuditStatus {
 export enum UserRole {
   SUPER_ADMIN = 'SuperAdmin',
   ADMIN = 'Admin',
+  AUDITOR_LEAD = 'AuditorLead',
   AUDITOR = 'Auditor',
+  DEPT_HEAD = 'DeptHead',
   AUDITEE = 'Auditee'
 }
 

@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import { useState, useEffect, FC } from 'react';
 import { AuditSession, AuditQuestion, AuditStatus, UserRole } from '../types';
-import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock, Cloud } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -11,12 +11,61 @@ interface AuditExecutionProps {
   onComplete: () => void;
 }
 
-const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onComplete }) => {
+const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onComplete }) => {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
+  
+  // Local State for buffering edits
+  // Initialize with empty, will be populated by useEffect to handle props or localStorage
+  const [localQuestions, setLocalQuestions] = useState<AuditQuestion[]>([]);
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+  
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [urlErrors, setUrlErrors] = useState<Record<string, string>>({});
+
+  // --- AUTO-LOAD & INIT LOGIC ---
+  useEffect(() => {
+    if (audit) {
+      const key = `sami_autosave_${audit.id}`;
+      const savedData = localStorage.getItem(key);
+      
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          setLocalQuestions(parsed);
+          // Optional: Could show a toast here saying "Restored from backup"
+        } catch (e) {
+          console.error("Failed to load autosave", e);
+          setLocalQuestions(audit.questions);
+        }
+      } else {
+        setLocalQuestions(audit.questions);
+      }
+    }
+  }, [audit?.id]);
+
+  // --- AUTO-SAVE LOGIC (Every 60s) ---
+  useEffect(() => {
+    if (!audit) return;
+
+    const autoSaveInterval = setInterval(() => {
+      if (localQuestions.length > 0) {
+        const key = `sami_autosave_${audit.id}`;
+        
+        // 1. Save to LocalStorage (Backup)
+        localStorage.setItem(key, JSON.stringify(localQuestions));
+        
+        // 2. Sync to Parent/App State (Main Persistence)
+        // We silently update the parent without showing the global saving loader
+        onUpdateAudit({ ...audit, questions: localQuestions });
+        
+        setLastAutoSave(new Date());
+      }
+    }, 60000); // 60 Seconds
+
+    return () => clearInterval(autoSaveInterval);
+  }, [localQuestions, audit, onUpdateAudit]);
 
   if (!audit) {
     return (
@@ -33,14 +82,8 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
   // --- PERMISSION LOGIC ---
   const role = currentUser?.role;
   const isAdmin = role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
-  
-  // AUDITOR: Can set Final Verdict & Notes. Can view Claims.
-  const isAuditor = role === UserRole.AUDITOR || isAdmin;
-  
-  // AUDITEE: Can set Claim & Evidence. Cannot set Final Verdict.
-  const isAuditee = role === UserRole.AUDITEE || isAdmin; 
-
-  // Specific Field Permissions
+  const isAuditor = role === UserRole.AUDITOR || role === UserRole.AUDITOR_LEAD || isAdmin;
+  const isAuditee = role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD || isAdmin; 
   const canEditFinalVerdict = isAuditor;
   const canEditClaim = isAuditee; 
 
@@ -53,50 +96,44 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
     }
   };
 
+  // NOTE: Handlers now update localQuestions state instead of calling onUpdateAudit immediately
+
   // Auditor: Set Final Verdict
   const handleComplianceChange = (questionId: string, status: AuditQuestion['compliance']) => {
-    // Rule: Auditor cannot fill if Auditee has not filled (unless Admin override might apply, but standard rule is enforced)
-    const question = audit.questions.find(q => q.id === questionId);
-    const auditeeHasFilled = !!question?.auditeeSelfAssessment;
+    const question = localQuestions.find(q => q.id === questionId);
+    const auditeeHasFilled = !!question?.auditeeSelfAssessment && !!question?.evidence;
 
     if (!canEditFinalVerdict) return;
 
     // STRICT CHECK: Auditor Block
-    if (!auditeeHasFilled && !isAuditee) { // isAuditee check allows Admin who is simulating auditee to potentially bypass, but standard auditor is blocked
-       alert("Akses Terkunci: Auditee belum melengkapi Klaim Self-Assessment pada butir ini.");
+    if (!auditeeHasFilled && !isAuditee) { 
+       alert("Akses Terkunci: Auditee harus melengkapi Klaim Self-Assessment DAN Bukti (URL/Teks) pada butir ini sebelum diverifikasi.");
        return;
     }
 
-    const updatedQuestions = audit.questions.map(q => 
+    setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, compliance: status } : q
-    );
-    onUpdateAudit({ ...audit, questions: updatedQuestions });
+    ));
   };
 
   // Auditee: Set Self Assessment Claim
   const handleSelfAssessmentChange = (questionId: string, status: AuditQuestion['auditeeSelfAssessment']) => {
     if (!canEditClaim) return;
-    const updatedQuestions = audit.questions.map(q => 
+    setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, auditeeSelfAssessment: status } : q
-    );
-    onUpdateAudit({ ...audit, questions: updatedQuestions });
+    ));
   };
 
   const handleTextChange = (questionId: string, field: keyof AuditQuestion, value: string) => {
-    // STRICT CHECK for Auditor Notes
     if (field === 'auditorNotes') {
-        const question = audit.questions.find(q => q.id === questionId);
-        const auditeeHasFilled = !!question?.auditeeSelfAssessment;
-        if (!canEditFinalVerdict || (!auditeeHasFilled && !isAuditee)) {
-             // If trying to type in read-only or blocked state
-             return; 
-        }
+        const question = localQuestions.find(q => q.id === questionId);
+        const auditeeHasFilled = !!question?.auditeeSelfAssessment && !!question?.evidence;
+        if (!canEditFinalVerdict || (!auditeeHasFilled && !isAuditee)) return; 
     }
 
-    const updatedQuestions = audit.questions.map(q => 
+    setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, [field]: value } : q
-    );
-    onUpdateAudit({ ...audit, questions: updatedQuestions });
+    ));
   };
 
   const handleEvidenceChange = (questionId: string, value: string) => {
@@ -112,7 +149,6 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
     }
 
     try {
-      // Simple protocol check plus basic URL structure
       if (!/^https?:\/\//i.test(value)) {
          throw new Error("Missing protocol");
       }
@@ -130,45 +166,59 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
     }
   };
 
+  // Manual Save Draft
   const handleSaveDraft = () => {
+    if (!window.confirm(t('confirm.save'))) return;
+
     setIsSaving(true);
-    onUpdateAudit({ ...audit, status: AuditStatus.IN_PROGRESS });
+    
+    // Manual Sync to LocalStorage
+    const key = `sami_autosave_${audit.id}`;
+    localStorage.setItem(key, JSON.stringify(localQuestions));
+    
+    // Sync to Parent
+    onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.IN_PROGRESS });
+    
+    setLastAutoSave(new Date());
+    
     setTimeout(() => {
       setIsSaving(false);
     }, 800);
   };
 
+  // Complete Audit
   const handleCompleteAudit = () => {
     if (confirm(t('exec.confirm'))) {
-      onUpdateAudit({ ...audit, status: AuditStatus.COMPLETED });
+      // Ensure latest local state is flushed to parent before completing
+      onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.COMPLETED });
+      // Clear autosave? Maybe keep it as history.
+      // localStorage.removeItem(`sami_autosave_${audit.id}`); 
       onComplete();
     }
   };
 
-  // Helper to detect URLs for the "Open Link" button
+  // Helper to detect URLs
   const getUrl = (text: string | undefined) => {
     if (!text) return null;
     const match = text.match(/(https?:\/\/[^\s]+)/);
     return match ? match[0] : null;
   };
 
-  // Weighted Progress Calculation
-  const totalQuestions = audit.questions.length;
+  // Weighted Progress Calculation based on localQuestions
+  const totalQuestions = localQuestions.length;
+  const progressMode = (role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD) ? 'AUDITEE' : 'AUDITOR';
   
-  // Progress Logic:
-  // If Auditee: Count how many have Evidence OR Self Assessment
-  // If Auditor: Count how many have Final Verdict (Compliance)
-  const isAuditorMode = currentUser?.role === UserRole.AUDITOR;
-  
-  const answeredQuestions = audit.questions.filter(q => {
-      if (isAuditorMode) return q.compliance !== null;
-      return q.auditeeSelfAssessment !== null || (q.evidence && q.evidence.length > 0);
+  const answeredQuestions = localQuestions.filter(q => {
+      if (progressMode === 'AUDITOR') {
+        return q.compliance !== null || (q.auditorNotes && q.auditorNotes.trim().length > 0);
+      }
+      return q.auditeeSelfAssessment !== null || (q.evidence && q.evidence.trim().length > 0);
   }).length;
   
   let progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
+    <div className="p-6 max-w-5xl mx-auto h-full flex flex-col">
       {/* Header Section */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6 flex-shrink-0 z-10 relative">
         <div className="flex justify-between items-start mb-4">
@@ -182,30 +232,40 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
             <p className="text-slate-500 text-sm">ID: {audit.id} • {new Date(audit.date).toLocaleDateString()} • {role}</p>
           </div>
           
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleSaveDraft}
-              disabled={isSaving}
-              className={`px-5 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-sm border ${
-                isSaving 
-                  ? 'bg-blue-50 text-blue-400 border-blue-100 cursor-wait' 
-                  : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-              }`}
-            >
-              {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {isSaving ? t('exec.btn.saving') : t('exec.btn.save')}
-            </button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-3">
+              {/* Auto-save Indicator */}
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mr-2">
+                 <Cloud size={14} className={lastAutoSave ? "text-green-500" : "text-slate-300"} />
+                 {lastAutoSave 
+                    ? `Auto-saved ${lastAutoSave.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                    : 'Auto-save active (60s)'}
+              </div>
 
-            {/* Only Auditor/Admin can Finalize the audit session */}
-            {canEditFinalVerdict && (
               <button 
-                onClick={handleCompleteAudit}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-green-200"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className={`px-5 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-sm border ${
+                  isSaving 
+                    ? 'bg-blue-50 text-blue-400 border-blue-100 cursor-wait' 
+                    : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
+                }`}
               >
-                <CheckCircle size={18} />
-                {t('exec.btn.complete')}
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {isSaving ? t('exec.btn.saving') : t('exec.btn.save')}
               </button>
-            )}
+
+              {/* Only Auditor/Lead/Admin can Finalize */}
+              {canEditFinalVerdict && (
+                <button 
+                  onClick={handleCompleteAudit}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-green-200"
+                >
+                  <CheckCircle size={18} />
+                  {t('exec.btn.complete')}
+                </button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -213,13 +273,13 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
         <div className="space-y-2">
           <div className="flex justify-between items-end text-sm">
              <span className="font-medium text-slate-700">
-                {isAuditorMode ? 'Progres Verifikasi Auditor' : 'Progres Pengisian Auditee'}
+                {progressMode === 'AUDITOR' ? 'Progres Verifikasi Auditor' : 'Progres Pengisian Auditee'}
              </span>
              <div className="flex items-baseline gap-2">
                <span className="text-xs text-slate-400 font-medium">
                  {answeredQuestions}/{totalQuestions} items
                </span>
-               <span className={`font-bold text-lg transition-colors duration-500 ${progress === 100 ? 'text-green-600' : 'text-blue-600'}`}>
+               <span className={`font-bold text-lg transition-all duration-300 ${progress === 100 ? 'text-green-600' : 'text-blue-600'}`}>
                  {progress}%
                </span>
              </div>
@@ -237,25 +297,23 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
         </div>
       </div>
 
-      {/* Questions List */}
+      {/* Questions List using localQuestions */}
       <div className="space-y-4 overflow-y-auto flex-1 pb-20 pr-2 scroll-smooth">
-        {audit.questions.map((q) => {
+        {localQuestions.map((q) => {
           const isExpanded = expandedId === q.id;
           const evidenceLink = getUrl(q.evidence);
           
-          // Calculate Status Color
           const isVerified = !!q.compliance;
           const isClaimed = !!q.auditeeSelfAssessment;
           
-          // RULE: Auditor cannot act until Auditee has claimed self assessment
-          const auditeeHasFilled = !!q.auditeeSelfAssessment;
+          const auditeeHasFilled = !!q.auditeeSelfAssessment && !!q.evidence;
           const canAuditorAction = canEditFinalVerdict && auditeeHasFilled;
           
           let borderColor = 'border-slate-200';
           if (isVerified) {
               borderColor = q.compliance === 'Compliant' ? 'border-green-500' : 'border-red-500';
           } else if (isClaimed) {
-              borderColor = 'border-blue-400'; // Claimed but not verified
+              borderColor = 'border-blue-400';
           }
 
           return (
@@ -279,7 +337,6 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                     {/* Mini Status Indicators */}
                     {!isExpanded && (
                        <div className="mt-3 flex gap-2">
-                          {/* Claim Indicator */}
                           {q.auditeeSelfAssessment ? (
                              <span className="text-[10px] flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 font-medium">
                                <Building2 size={10} /> Claim: {q.auditeeSelfAssessment}
@@ -290,7 +347,6 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                              </span>
                           )}
                           
-                          {/* Verdict Indicator */}
                           {q.compliance && (
                              <span className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded border font-bold ${
                                 q.compliance === 'Compliant' ? 'bg-green-50 text-green-700 border-green-100' : 
@@ -315,9 +371,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
               {isExpanded && (
                 <div className="animate-fade-in">
                    
-                   {/* ------------------------------------------------------- */}
-                   {/* AREA AUDITEE (Claim & Evidence) */}
-                   {/* ------------------------------------------------------- */}
+                   {/* AREA AUDITEE */}
                    <div className="p-5 bg-slate-50/80 border-t border-slate-100">
                       <div className="flex items-center gap-2 mb-4 text-blue-700 font-bold text-sm uppercase tracking-wider">
                          <Building2 size={16} />
@@ -325,7 +379,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         {/* 1. SELF ASSESSMENT CLAIM */}
+                         {/* 1. SELF ASSESSMENT */}
                          <div>
                             <label className="block text-xs font-bold text-slate-500 mb-2">Klaim Kepatuhan (Self Assessment)</label>
                             <div className="flex gap-2">
@@ -346,7 +400,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                             </div>
                          </div>
 
-                         {/* 2. EVIDENCE URL */}
+                         {/* 2. EVIDENCE */}
                          <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                <label className="block text-xs font-bold text-slate-500">Tautan Bukti (URL)</label>
@@ -370,9 +424,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                       </div>
                    </div>
 
-                   {/* ------------------------------------------------------- */}
-                   {/* AREA AUDITOR (Verification) */}
-                   {/* ------------------------------------------------------- */}
+                   {/* AREA AUDITOR */}
                    <div className="p-5 bg-white border-t border-slate-200 relative">
                       <div className="flex items-center justify-between mb-4">
                          <div className="flex items-center gap-2 text-slate-800 font-bold text-sm uppercase tracking-wider">
@@ -381,7 +433,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                          </div>
                          {!canAuditorAction && canEditFinalVerdict && (
                             <span className="text-xs text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
-                               <Lock size={10}/> Menunggu Auditee
+                               <Lock size={10}/> Menunggu Lengkap (Klaim & Bukti)
                             </span>
                          )}
                          {!canEditFinalVerdict && !isAuditee && (
@@ -391,20 +443,18 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                          )}
                       </div>
 
-                      {/* Blocking Warning if Auditee hasn't filled yet */}
                       {canEditFinalVerdict && !auditeeHasFilled && (
                          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 shadow-sm">
                             <AlertCircle size={20} className="text-amber-600 mt-0.5" />
                             <div>
                                <p className="text-sm font-bold text-amber-800">Akses Terkunci</p>
                                <p className="text-xs text-amber-700 mt-1">
-                                 Anda tidak dapat memberikan penilaian (verifikasi) atau catatan sebelum Auditee melengkapi Klaim Kepatuhan pada poin ini.
+                                 Anda tidak dapat memberikan penilaian (verifikasi) atau catatan sebelum Auditee melengkapi <strong>Klaim Kepatuhan</strong> dan <strong>Bukti</strong>.
                                </p>
                             </div>
                          </div>
                       )}
 
-                      {/* Verification Comparison Display (Only visible if claim exists) */}
                       {q.auditeeSelfAssessment && (
                          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between animate-fade-in">
                             <span className="text-xs text-blue-700 font-medium">Klaim Auditee: <strong>{q.auditeeSelfAssessment}</strong></span>
@@ -415,7 +465,7 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         {/* 3. FINAL COMPLIANCE */}
+                         {/* 3. VERDICT */}
                          <div>
                             <label className="block text-xs font-bold text-slate-500 mb-2">Status Kepatuhan Final (Verdict)</label>
                             <div className="flex gap-2">
@@ -439,35 +489,60 @@ const AuditExecution: React.FC<AuditExecutionProps> = ({ audit, onUpdateAudit, o
                             </div>
                          </div>
 
-                         {/* 4. AUDITOR NOTES */}
+                         {/* 4. NOTES */}
                          <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-2">Catatan Auditor</label>
+                            <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-2">
+                               <FileText size={14} /> Catatan Auditor
+                            </label>
                             <textarea
-                               rows={2}
+                               rows={5}
                                value={q.auditorNotes || ''}
                                onChange={(e) => handleTextChange(q.id, 'auditorNotes', e.target.value)}
                                disabled={!canAuditorAction}
-                               placeholder={canAuditorAction ? "Catatan temuan atau rekomendasi..." : "Menunggu Auditee..."}
-                               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                               placeholder={canAuditorAction ? "Tuliskan detail temuan, observasi, atau rekomendasi perbaikan di sini..." : "Menunggu Auditee (Klaim & Bukti)..."}
+                               className="w-full px-4 py-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-400 shadow-sm transition-all resize-y placeholder:text-slate-400"
                             />
                          </div>
                       </div>
                    </div>
                    
-                   {/* 5. FOLLOW UP (Shared) */}
+                   {/* 5. FOLLOW UP */}
                    {(q.compliance === 'Non-Compliant' || q.compliance === 'Observation') && (
-                      <div className="p-5 bg-amber-50/50 border-t border-amber-100">
-                         <label className="block text-xs font-bold text-amber-700 mb-2 flex items-center gap-1">
-                            <Calendar size={14}/> Rencana Tindak Lanjut (Action Plan)
-                         </label>
-                         <textarea
-                           rows={2}
-                           value={q.actionPlan || ''}
-                           onChange={(e) => handleTextChange(q.id, 'actionPlan', e.target.value)}
-                           disabled={!isAuditee} // Usually Auditee proposes plan
-                           placeholder="Jelaskan rencana perbaikan (Diisi oleh Auditee)..."
-                           className="w-full px-3 py-2 rounded-lg border border-amber-200 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50"
-                         />
+                      <div className="p-5 bg-amber-50/50 border-t border-amber-100 animate-fade-in">
+                         <div className="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase tracking-wider mb-4">
+                            <Calendar size={16}/> 
+                            Rencana Tindak Lanjut (Action Plan)
+                         </div>
+                         
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                             <div className="md:col-span-2">
+                                 <label className="block text-xs font-bold text-slate-500 mb-2">Deskripsi Rencana Perbaikan</label>
+                                 <textarea
+                                   rows={3}
+                                   value={q.actionPlan || ''}
+                                   onChange={(e) => handleTextChange(q.id, 'actionPlan', e.target.value)}
+                                   disabled={!isAuditee} 
+                                   placeholder="Jelaskan langkah konkret perbaikan yang akan dilakukan..."
+                                   className="w-full px-4 py-2 rounded-lg border border-amber-200 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50 transition-all shadow-sm placeholder:text-slate-400 bg-white"
+                                 />
+                             </div>
+                             <div>
+                                 <label className="block text-xs font-bold text-slate-500 mb-2">Target Penyelesaian (Deadline)</label>
+                                 <input
+                                   type="date"
+                                   value={q.actionPlanDeadline || ''}
+                                   onChange={(e) => handleTextChange(q.id, 'actionPlanDeadline', e.target.value)}
+                                   disabled={!isAuditee}
+                                   className="w-full px-4 py-2 rounded-lg border border-amber-200 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50 transition-all shadow-sm bg-white text-slate-700"
+                                 />
+                             </div>
+                         </div>
+                         {isAuditee && (
+                            <p className="text-[10px] text-amber-600 mt-3 italic flex items-center gap-1">
+                               <AlertCircle size={10} />
+                               Wajib diisi oleh Auditee sebagai komitmen perbaikan atas temuan audit.
+                            </p>
+                         )}
                       </div>
                    )}
                 </div>

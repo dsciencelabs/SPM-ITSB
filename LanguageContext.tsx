@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useState, useContext, ReactNode, FC } from 'react';
 
 type Language = 'id' | 'en';
 
@@ -11,6 +11,15 @@ interface LanguageContextType {
 
 const translations = {
   id: {
+    // Global Confirmations
+    'confirm.general': 'Konfirmasi Tindakan',
+    'confirm.save': 'Apakah Anda yakin ingin MENYIMPAN data ini?',
+    'confirm.delete': 'Apakah Anda yakin ingin MENGHAPUS data ini? Tindakan ini tidak dapat dibatalkan.',
+    'confirm.update': 'Apakah Anda yakin ingin MEMPERBARUI data ini?',
+    'confirm.add': 'Apakah Anda yakin ingin MENAMBAH data baru?',
+    'confirm.action': 'Apakah Anda yakin ingin melanjutkan tindakan ini?',
+    'confirm.cancel': 'Apakah Anda yakin ingin membatalkan?',
+
     // Sidebar
     'nav.dashboard': 'Dashboard',
     'nav.newAudit': 'Audit Baru',
@@ -18,6 +27,7 @@ const translations = {
     'nav.report': 'Laporan & AI',
     'nav.systemStatus': 'Status Sistem',
     'nav.aiConnected': 'Gemini AI Terhubung',
+    'nav.logout': 'Keluar Aplikasi',
     
     // Dashboard
     'dash.title': 'Dashboard Audit',
@@ -118,7 +128,7 @@ const translations = {
 
     // User Management
     'mgmt.user.title': 'Manajemen Pengguna',
-    'mgmt.user.desc': 'Kelola akses SuperAdmin, Admin, Auditor, dan Auditee.',
+    'mgmt.user.desc': 'Kelola akses SuperAdmin, Admin, Auditor Lead, Auditor, Dept Head dan Auditee.',
     'mgmt.active.title': 'Pengguna Aktif',
     'mgmt.active.desc': 'Pengguna dengan akses aktif ke sistem',
     'mgmt.btnAdd': 'Tambah Pengguna',
@@ -185,6 +195,15 @@ const translations = {
     'mgmt.set.save': 'Simpan Perubahan Sistem',
   },
   en: {
+    // Global Confirmations
+    'confirm.general': 'Action Confirmation',
+    'confirm.save': 'Are you sure you want to SAVE this data?',
+    'confirm.delete': 'Are you sure you want to DELETE this data? This cannot be undone.',
+    'confirm.update': 'Are you sure you want to UPDATE this data?',
+    'confirm.add': 'Are you sure you want to ADD this new data?',
+    'confirm.action': 'Are you sure you want to proceed?',
+    'confirm.cancel': 'Are you sure you want to cancel?',
+
     // Sidebar
     'nav.dashboard': 'Dashboard',
     'nav.newAudit': 'New Audit',
@@ -192,6 +211,7 @@ const translations = {
     'nav.report': 'Report & AI',
     'nav.systemStatus': 'System Status',
     'nav.aiConnected': 'Gemini AI Connected',
+    'nav.logout': 'Logout',
     
     // Dashboard
     'dash.title': 'Audit Dashboard',
@@ -362,7 +382,7 @@ const translations = {
 
 export const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const LanguageProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('id');
 
   const t = (key: string): string => {
