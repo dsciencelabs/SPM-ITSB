@@ -16,7 +16,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   const { currentUser } = useAuth();
   
   // Local State for buffering edits
-  // Initialize with empty, will be populated by useEffect to handle props or localStorage
   const [localQuestions, setLocalQuestions] = useState<AuditQuestion[]>([]);
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   
@@ -34,7 +33,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         try {
           const parsed = JSON.parse(savedData);
           setLocalQuestions(parsed);
-          // Optional: Could show a toast here saying "Restored from backup"
         } catch (e) {
           console.error("Failed to load autosave", e);
           setLocalQuestions(audit.questions);
@@ -57,7 +55,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         localStorage.setItem(key, JSON.stringify(localQuestions));
         
         // 2. Sync to Parent/App State (Main Persistence)
-        // We silently update the parent without showing the global saving loader
         onUpdateAudit({ ...audit, questions: localQuestions });
         
         setLastAutoSave(new Date());
@@ -95,8 +92,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
       setExpandedId(id);
     }
   };
-
-  // NOTE: Handlers now update localQuestions state instead of calling onUpdateAudit immediately
 
   // Auditor: Set Final Verdict
   const handleComplianceChange = (questionId: string, status: AuditQuestion['compliance']) => {
@@ -171,14 +166,9 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     if (!window.confirm(t('confirm.save'))) return;
 
     setIsSaving(true);
-    
-    // Manual Sync to LocalStorage
     const key = `sami_autosave_${audit.id}`;
     localStorage.setItem(key, JSON.stringify(localQuestions));
-    
-    // Sync to Parent
     onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.IN_PROGRESS });
-    
     setLastAutoSave(new Date());
     
     setTimeout(() => {
@@ -189,10 +179,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   // Complete Audit
   const handleCompleteAudit = () => {
     if (confirm(t('exec.confirm'))) {
-      // Ensure latest local state is flushed to parent before completing
       onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.COMPLETED });
-      // Clear autosave? Maybe keep it as history.
-      // localStorage.removeItem(`sami_autosave_${audit.id}`); 
       onComplete();
     }
   };
@@ -204,7 +191,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     return match ? match[0] : null;
   };
 
-  // Weighted Progress Calculation based on localQuestions
+  // Weighted Progress Calculation
   const totalQuestions = localQuestions.length;
   const progressMode = (role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD) ? 'AUDITEE' : 'AUDITOR';
   
@@ -217,19 +204,59 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   
   let progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
 
+  // Date Helper for Deadlines
+  const getDeadlineText = (dateString?: string) => {
+     if (!dateString) return null;
+     const deadline = new Date(dateString);
+     const today = new Date();
+     const diffTime = deadline.getTime() - today.getTime();
+     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+     if (diffDays < 0) return { text: 'Overdue', color: 'text-red-600', bg: 'bg-red-50' };
+     if (diffDays <= 3) return { text: `${diffDays} Hari Lagi`, color: 'text-amber-600', bg: 'bg-amber-50' };
+     return { text: `${diffDays} Hari Lagi`, color: 'text-blue-600', bg: 'bg-blue-50' };
+  };
+
+  const auditeeDL = getDeadlineText(audit.auditeeDeadline);
+  const auditorDL = getDeadlineText(audit.auditorDeadline);
+
   return (
     <div className="p-6 max-w-5xl mx-auto h-full flex flex-col">
       {/* Header Section */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6 flex-shrink-0 z-10 relative">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-slate-900">{audit.department}</h2>
               <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
                 {audit.standard}
               </span>
             </div>
-            <p className="text-slate-500 text-sm">ID: {audit.id} • {new Date(audit.date).toLocaleDateString()} • {role}</p>
+            <div className="text-slate-500 text-xs flex items-center gap-4">
+                <span>ID: {audit.id}</span>
+                <span>•</span>
+                <span>Started: {new Date(audit.date).toLocaleDateString()}</span>
+            </div>
+            
+            {/* DEADLINE BADGES */}
+            <div className="mt-3 flex items-center gap-3">
+               {audit.auditeeDeadline && (
+                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded border ${auditeeDL?.bg} ${auditeeDL?.color} border-current/10`}>
+                    <Building2 size={14} />
+                    <div className="text-xs">
+                       <span className="font-semibold">Batas Auditee:</span> {new Date(audit.auditeeDeadline).toLocaleDateString()} ({auditeeDL?.text})
+                    </div>
+                 </div>
+               )}
+               {audit.auditorDeadline && (
+                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded border ${auditorDL?.bg} ${auditorDL?.color} border-current/10`}>
+                    <UserCheck size={14} />
+                    <div className="text-xs">
+                       <span className="font-semibold">Batas Auditor:</span> {new Date(audit.auditorDeadline).toLocaleDateString()} ({auditorDL?.text})
+                    </div>
+                 </div>
+               )}
+            </div>
           </div>
           
           <div className="flex flex-col items-end gap-2">
@@ -270,7 +297,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         </div>
         
         {/* Progress Bar */}
-        <div className="space-y-2">
+        <div className="space-y-2 mt-4">
           <div className="flex justify-between items-end text-sm">
              <span className="font-medium text-slate-700">
                 {progressMode === 'AUDITOR' ? 'Progres Verifikasi Auditor' : 'Progres Pengisian Auditee'}

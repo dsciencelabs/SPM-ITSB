@@ -16,6 +16,7 @@ import { ArrowUp } from 'lucide-react';
 
 // Mock Data for initial visualization
 const MOCK_AUDITS: AuditSession[] = [
+  // 1. COMPLETED AUDIT (Example for Reports) - LAM INFOKOM
   {
     id: 'audit-if-2024-complete',
     name: 'Audit Mutu Internal - Siklus Ganjil 2024/2025',
@@ -23,7 +24,9 @@ const MOCK_AUDITS: AuditSession[] = [
     standard: AuditStandard.LAM_INFOKOM,
     status: AuditStatus.COMPLETED,
     date: '2024-10-15T09:00:00Z',
-    assignedAuditorId: 'au-1', // Dr. Budi Santoso (External from Sipil)
+    auditeeDeadline: '2024-10-29T09:00:00Z',
+    auditorDeadline: '2024-11-05T09:00:00Z',
+    assignedAuditorId: 'au-lpm', // Auditor Internal LPM
     aiSummary: 'Secara umum, Prodi S1 Informatika telah memenuhi standar LAM INFOKOM dengan baik, terutama pada aspek Kurikulum OBE dan Kualifikasi Dosen. Namun, ditemukan ketidaksesuaian pada aspek jabatan fungsional dosen yang perlu segera ditindaklanjuti.',
     aiRecommendations: [
       'Percepatan pengurusan Jabatan Fungsional Lektor Kepala bagi 30% dosen.',
@@ -35,10 +38,8 @@ const MOCK_AUDITS: AuditSession[] = [
          id: 'LI.C.1',
          category: 'C.1 Visi Misi',
          questionText: 'Apakah Visi Keilmuan Program Studi (VMTS) memiliki keunikan spesifik di bidang Infokom/Digital dan telah disosialisasikan?',
-         // Auditee Action
          auditeeSelfAssessment: 'Compliant',
          evidence: 'https://informatika.itsb.ac.id/visi-misi-dokumen-sk-rektor.pdf',
-         // Auditor Action
          compliance: 'Compliant',
          auditorNotes: 'Visi sangat jelas memuat unsur "Green & Digital Eco-City". Bukti sosialisasi tersedia di website dan notulensi rapat prodi.',
          actionPlan: '',
@@ -48,63 +49,198 @@ const MOCK_AUDITS: AuditSession[] = [
          id: 'LI.C.4',
          category: 'C.4 Sumber Daya Manusia',
          questionText: 'Apakah minimal 50% Dosen Tetap telah memiliki Jabatan Fungsional Lektor Kepala?',
-         // Auditee Action
          auditeeSelfAssessment: 'Non-Compliant',
          evidence: 'https://hrd.itsb.ac.id/data-dosen-if-2024.pdf',
-         // Auditor Action
          compliance: 'Non-Compliant',
          auditorNotes: 'Berdasarkan data, baru 25% dosen yang Lektor Kepala. Mayoritas masih Asisten Ahli dan Lektor. Ini temuan Mayor.',
-         // Auditee Reaction (Action Plan)
          actionPlan: '1. Membentuk tim task force percepatan Jafung. 2. Mengalokasikan dana hibah internal untuk publikasi syarat khusus.',
          actionPlanDeadline: '2025-06-30'
-       },
-       {
-         id: 'LI.C.6',
-         category: 'C.6 Pendidikan',
-         questionText: 'Apakah kurikulum mengakomodasi sertifikasi kompetensi industri (Micro-credential) bagi mahasiswa?',
-         // Auditee Action
-         auditeeSelfAssessment: 'Compliant',
-         evidence: 'https://drive.google.com/pks-oracle-academy-2024',
-         // Auditor Action
-         compliance: 'Observation', // Auditor disagrees/observes nuance
-         auditorNotes: 'Kerjasama dengan Oracle Academy ada, namun belum terintegrasi penuh ke dalam SKS transkrip nilai. Baru sebatas SKPI.',
-         actionPlan: 'Akan dilakukan revisi kurikulum 2025 untuk ekuivalensi sertifikasi ke mata kuliah pilihan.',
-         actionPlanDeadline: '2024-12-20'
        }
     ],
   },
+
+  // 2. ACTIVE AUDIT - REKTORAT (Auditor Lead vs Rektorat Staff)
   {
-    id: 'audit-ts-2024-active',
-    name: 'Audit Mutu Internal - Siklus Ganjil 2024/2025',
-    department: 'S1 - Teknik Sipil',
-    standard: AuditStandard.LAM_TEKNIK,
+    id: 'audit-rek-001',
+    name: 'Audit Kinerja Rektorat 2024',
+    department: 'Rektorat',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
     status: AuditStatus.IN_PROGRESS,
     date: new Date().toISOString(),
-    assignedAuditorId: 'au-2', // Ir. Siti Aminah
+    // Current + 14 days
+    auditeeDeadline: new Date(new Date().getTime() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    // Current + 21 days
+    auditorDeadline: new Date(new Date().getTime() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+    assignedAuditorId: 'lead-1', // Assigned to Lead Auditor
     questions: [
        {
-         id: 'LT.1.1',
-         category: 'Kriteria 1 - Visi Misi',
-         questionText: 'Ketersediaan dokumen formal Renstra FTSP/Prodi yang memuat indikator kinerja utama (IKU) teknik.',
+         id: 'P.A.1',
+         category: 'A. Kebijakan',
+         questionText: 'Apakah unit kerja memiliki dokumen kebijakan SPMI yang selaras dengan Permendiktisaintek No. 39/2025?',
          auditeeSelfAssessment: 'Compliant',
-         evidence: 'https://sipil.itsb.ac.id/renstra-final',
-         compliance: null, // Auditor hasn't verified yet
+         evidence: 'https://drive.itsb.ac.id/sk-kebijakan-spmi-2025',
+         compliance: null, // Waiting for Auditor Verdict
          auditorNotes: '',
        },
        {
-         id: 'LT.4.1',
-         category: 'Kriteria 4 - SDM',
-         questionText: 'Kecukupan jumlah dosen tetap (DTPS) dengan kualifikasi insinyur profesional (IPM/IPU).',
-         auditeeSelfAssessment: null, // Auditee hasn't filled yet
+         id: 'P.C.1',
+         category: 'C. Pelaporan',
+         questionText: 'Apakah laporan kinerja unit disampaikan secara berkala kepada pimpinan universitas dan yayasan?',
+         auditeeSelfAssessment: null, // Waiting for Auditee (Staff Rektorat)
          evidence: '',
          compliance: null,
          auditorNotes: '',
        }
     ],
-  }
+  },
+
+  // 3. ACTIVE AUDIT - DIREKTORAT IT (Auditee needs to fill)
+  {
+    id: 'audit-it-001',
+    name: 'Audit Tata Kelola IT & Infrastruktur',
+    department: 'Direktorat IT',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
+    status: AuditStatus.IN_PROGRESS,
+    date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+    auditeeDeadline: new Date(Date.now() + 1209600000).toISOString(), // +14 days approx
+    auditorDeadline: new Date(Date.now() + 1814400000).toISOString(), // +21 days approx
+    assignedAuditorId: 'au-lpm', // Auditor Internal LPM
+    questions: [
+       {
+         id: 'IT.1.1',
+         category: 'Infrastruktur',
+         questionText: 'Ketersediaan dokumen Disaster Recovery Plan (DRP) untuk sistem informasi akademik.',
+         auditeeSelfAssessment: 'Observation',
+         evidence: 'https://it.itsb.ac.id/drp-draft-v1',
+         compliance: 'Observation',
+         auditorNotes: 'Dokumen masih berupa draft, belum disahkan oleh Rektor. Mohon segera difinalisasi.',
+         actionPlan: 'Finalisasi dokumen DRP dan pengajuan tanda tangan Rektor.',
+         actionPlanDeadline: '2024-12-01'
+       },
+       {
+         id: 'IT.2.1',
+         category: 'Keamanan Siber',
+         questionText: 'Apakah telah dilakukan Penetration Testing (Pentest) pada aplikasi utama minimal 1 tahun sekali?',
+         auditeeSelfAssessment: null, // Auditee (Staff IT) needs to fill this
+         evidence: '',
+         compliance: null,
+         auditorNotes: '',
+       }
+    ],
+  },
+
+  // 4. ACTIVE AUDIT - LP3B (Partially filled)
+  {
+    id: 'audit-lp3b-001',
+    name: 'Audit Pengembangan Pembelajaran LP3B',
+    department: 'LP3B',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
+    status: AuditStatus.IN_PROGRESS,
+    date: new Date().toISOString(),
+    auditeeDeadline: new Date(Date.now() + 1209600000).toISOString(),
+    auditorDeadline: new Date(Date.now() + 1814400000).toISOString(),
+    assignedAuditorId: 'lead-1',
+    questions: [
+       {
+         id: 'LP.1',
+         category: 'Kurikulum',
+         questionText: 'Persentase mata kuliah yang telah menggunakan metode Case Method dan Team Based Project.',
+         auditeeSelfAssessment: 'Compliant',
+         evidence: 'https://lp3b.itsb.ac.id/laporan-rps-2024',
+         compliance: 'Compliant',
+         auditorNotes: 'Cukup baik, 60% MK sudah menerapkan.',
+       }
+    ],
+  },
+
+  // 5. PLANNED AUDIT - PRODI SIPIL - LAM TEKNIK
+  {
+    id: 'audit-ts-plan',
+    name: 'Audit Lapangan Teknik Sipil',
+    department: 'S1 - Teknik Sipil',
+    standard: AuditStandard.LAM_TEKNIK,
+    status: AuditStatus.PLANNED,
+    date: '2024-12-20T09:00:00Z',
+    assignedAuditorId: 'pwk-auditor', // Cross audit from PWK
+    questions: [],
+  },
+
+  // 6. PLANNED AUDIT - SAWIT (Vokasi) - BAN PT
+  {
+    id: 'audit-tps-plan',
+    name: 'Asesmen Lapangan D3 Sawit',
+    department: 'D3 - Teknologi Pengolahan Sawit',
+    standard: AuditStandard.BAN_PT,
+    status: AuditStatus.PLANNED,
+    date: '2025-01-10T09:00:00Z',
+    assignedAuditorId: 'au-lpm',
+    questions: [],
+  },
+
+  // 7. NEW: Audit Dir DikMa (Planned)
+  {
+    id: 'audit-dikma-plan',
+    name: 'Audit Layanan Akademik & Kemahasiswaan',
+    department: 'Direktorat Pendidikan & Kemahasiswaan',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
+    status: AuditStatus.PLANNED,
+    date: '2025-02-15T09:00:00Z',
+    assignedAuditorId: 'au-lpm', 
+    questions: [],
+  },
+
+  // 8. NEW: Audit Perpustakaan (In Progress)
+  {
+    id: 'audit-lib-001',
+    name: 'Audit Standar Perpustakaan Nasional',
+    department: 'Perpustakaan',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
+    status: AuditStatus.IN_PROGRESS,
+    date: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+    auditeeDeadline: new Date(Date.now() + 1000000000).toISOString(),
+    auditorDeadline: new Date(Date.now() + 1500000000).toISOString(),
+    assignedAuditorId: 'au-lpm',
+    questions: [
+       {
+         id: 'LIB.1',
+         category: 'Koleksi',
+         questionText: 'Kecukupan jumlah judul buku teks per program studi (minimal 200 judul/prodi).',
+         auditeeSelfAssessment: 'Compliant',
+         evidence: 'https://lib.itsb.ac.id/laporan-koleksi-2024.pdf',
+         compliance: null,
+         auditorNotes: '',
+       }
+    ],
+  },
+  
+  // 9. NEW: Audit Dir Sistem Informasi (Completed)
+  {
+    id: 'audit-si-complete',
+    name: 'Audit Pengembangan Sistem Informasi Terintegrasi',
+    department: 'Direktorat Sistem Informasi',
+    standard: AuditStandard.PERMENDIKTISAINTEK_2025,
+    status: AuditStatus.COMPLETED,
+    date: '2024-11-20T09:00:00Z',
+    assignedAuditorId: 'it-auditor', // Internal IT Auditor for SI
+    aiSummary: 'Direktorat Sistem Informasi telah berhasil mengintegrasikan 80% layanan akademik ke dalam portal tunggal. Kepatuhan terhadap standar keamanan data sangat baik.',
+    aiRecommendations: ['Perlu peningkatan kapasitas server untuk periode KRS.', 'Implementasi SSO untuk layanan eksternal.'],
+    questions: [
+       {
+         id: 'SI.1',
+         category: 'Integrasi Data',
+         questionText: 'Apakah pangkalan data perguruan tinggi (PDDikti) terhubung secara realtime dengan sistem internal?',
+         auditeeSelfAssessment: 'Compliant',
+         evidence: 'https://si.itsb.ac.id/api-logs-pddikti',
+         compliance: 'Compliant',
+         auditorNotes: 'Sync berjalan otomatis setiap 6 jam. Tidak ada isu backlog data.',
+         actionPlan: '',
+         actionPlanDeadline: ''
+       }
+    ],
+  },
 ];
 
-const STORAGE_KEY = 'ami_smart_audits_v3';
+const STORAGE_KEY = 'ami_smart_audits_v7'; // Bumped version to load new mocks with deadlines
 
 const AppContent: FC = () => {
   const { currentUser } = useAuth();
@@ -256,6 +392,7 @@ const AppContent: FC = () => {
               onCreateAudit={handleCreateAudit}
               onUpdateAudit={handleUpdateAudit}
               onDeleteAudit={handleDeleteAudit}
+              onNavigate={setCurrentView} 
             />
           )}
 

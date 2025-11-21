@@ -1,4 +1,3 @@
-
 import { useState, FC } from 'react';
 import { 
   LayoutDashboard, 
@@ -51,10 +50,11 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
       case UserRole.SUPER_ADMIN:
         return [
           ...base,
-          { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock }, // Added for SuperAdmin
+          { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock }, 
+          // ONLY Super Admin sees User Management and Master Data
           { id: 'USER_MGMT', label: 'User Management', icon: Users },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox },
           { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database },
+          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
           { id: 'REPORT', label: 'All Reports', icon: PieChart },
@@ -65,12 +65,11 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         return [
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock },
-          { id: 'USER_MGMT', label: 'User Management', icon: Users }, // Enabled
-          { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database }, // Enabled
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, // Enabled
+          // Admin does NOT see User Management or Master Data
+          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'AUDIT_EXECUTION', label: t('nav.execution'), icon: ClipboardList },
-          { id: 'REPORT', label: t('nav.report'), icon: PieChart },
+          { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
+          { id: 'REPORT', label: 'All Reports', icon: PieChart }, // Admin sees All Reports
         ];
 
       case UserRole.AUDITOR_LEAD:
@@ -78,9 +77,9 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Jadwal & Penugasan', icon: CalendarClock },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, // Enabled
+          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
           { id: 'AUDIT_EXECUTION', label: 'All Active Audits', icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart },
+          { id: 'REPORT', label: 'All Reports', icon: PieChart }, // Lead Auditor sees All Reports
         ];
 
       case UserRole.AUDITOR:

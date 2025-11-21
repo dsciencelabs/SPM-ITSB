@@ -1,4 +1,3 @@
-
 import { createContext, useState, useContext, ReactNode, useEffect, FC } from 'react';
 import { AuditStandard } from './types';
 
@@ -65,8 +64,16 @@ const INITIAL_UNITS: Unit[] = [
     { id: 31, code: 'TPS', name: 'D3 - Teknologi Pengolahan Sawit', type: 'Program Studi', faculty: 'Fakultas Vokasi', head: 'Kaprodi Sawit' },
     { id: 32, code: 'TPP', name: 'D4 - Teknologi Pengolahan Pulp dan Kertas', type: 'Program Studi', faculty: 'Fakultas Vokasi', head: 'Kaprodi Pulp & Kertas' },
 
-    // Biro / Lembaga
+    // ============================================================
+    // Biro / Lembaga / Direktorat / UPT (New Additions)
+    // ============================================================
     { id: 99, code: 'LPM', name: 'Lembaga Penjaminan Mutu', type: 'Biro/Lembaga', faculty: 'Rektorat', head: 'Ka. LPM' },
+    { id: 201, code: 'DIKMA', name: 'Direktorat Pendidikan & Kemahasiswaan', type: 'Direktorat', faculty: 'Rektorat', head: 'Direktur DikMa' },
+    { id: 202, code: 'PERPUS', name: 'Perpustakaan', type: 'UPT', faculty: 'Rektorat', head: 'Kepala Perpustakaan' },
+    { id: 203, code: 'LP3B', name: 'LP3B', type: 'Biro/Lembaga', faculty: 'Rektorat', head: 'Ketua LP3B' },
+    { id: 204, code: 'DIR-IT', name: 'Direktorat IT', type: 'Direktorat', faculty: 'Rektorat', head: 'Direktur IT' },
+    { id: 205, code: 'DIR-SI', name: 'Direktorat Sistem Informasi', type: 'Direktorat', faculty: 'Rektorat', head: 'Direktur SI' },
+    { id: 206, code: 'LSP', name: 'LSP', type: 'Lembaga', faculty: 'Rektorat', head: 'Ketua LSP' },
 ];
 
 const INITIAL_QUESTIONS: MasterQuestion[] = [
@@ -102,7 +109,7 @@ const INITIAL_QUESTIONS: MasterQuestion[] = [
   { id: 'BP.9', standard: AuditStandard.BAN_PT, category: 'Kriteria 9', text: 'Produk inovasi terapan yang dihasilkan mahasiswa bersama dosen dan mitra industri.' },
 ];
 
-const STORAGE_KEY = 'ami_master_data_v3';
+const STORAGE_KEY = 'ami_master_data_v6';
 
 export const MasterDataProvider: FC<{ children: ReactNode }> = ({ children }) => {
   // Units State

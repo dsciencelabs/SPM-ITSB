@@ -1,4 +1,3 @@
-
 import { useState, FC } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
@@ -27,10 +26,15 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   const [repoStatusFilter, setRepoStatusFilter] = useState<'ALL' | AuditStatus>('ALL');
 
   // GLOBAL PERMISSION CHECK
+  // Explicitly allow SuperAdmin and Admin to view all and perform actions like Reopen
   const isAdmin = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
+  
+  // Reopen Permission specifically
+  const canReopen = isAdmin;
 
   // Helper to Re-open from List View
-  const handleReopenFromList = (targetAudit: AuditSession) => {
+  const handleReopenFromList = (targetAudit: AuditSession, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row click
     if (confirm(t('report.reopenConfirm'))) {
         onUpdateAudit({ ...targetAudit, status: AuditStatus.IN_PROGRESS });
     }
@@ -48,13 +52,16 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
       switch (currentUser.role) {
         case UserRole.SUPER_ADMIN:
         case UserRole.ADMIN:
+        case UserRole.AUDITOR_LEAD: // Lead Auditor sees ALL reports
           allowed = true;
           break;
         case UserRole.AUDITEE:
+        case UserRole.DEPT_HEAD:
           // STRICT: Only own department
           allowed = a.department === currentUser.department;
           break;
         case UserRole.AUDITOR:
+          // Auditor sees ALL reports in repository for reference (or restrict if needed)
           allowed = true;
           break;
         default:
@@ -77,7 +84,11 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
       return true;
     });
 
-    const isAdminOrAuditor = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.AUDITOR;
+    const isAdminOrAuditor = 
+      currentUser?.role === UserRole.SUPER_ADMIN || 
+      currentUser?.role === UserRole.ADMIN || 
+      currentUser?.role === UserRole.AUDITOR_LEAD || 
+      currentUser?.role === UserRole.AUDITOR;
 
     return (
       <div className="animate-fade-in">
@@ -194,11 +205,11 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-3">
-                            {isAdmin && a.status === AuditStatus.COMPLETED && (
+                            {canReopen && a.status === AuditStatus.COMPLETED && (
                               <button
-                                onClick={() => handleReopenFromList(a)}
+                                onClick={(e) => handleReopenFromList(a, e)}
                                 className="text-amber-600 hover:text-amber-800 text-sm font-medium bg-amber-50 hover:bg-amber-100 p-1.5 rounded transition-colors border border-amber-200"
-                                title={t('report.btn.reopen')}
+                                title={t('report.btn.reopen') + " (Admin Only)"}
                               >
                                 <RotateCcw size={16} />
                               </button>
@@ -377,10 +388,11 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                 {audit.status === AuditStatus.COMPLETED ? t('repo.completed') : t('repo.progress')}
              </span>
              
-             {isAdmin && audit.status === AuditStatus.COMPLETED && (
+             {canReopen && audit.status === AuditStatus.COMPLETED && (
                 <button 
                   onClick={handleReopenAudit}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm border border-amber-200"
+                  title={t('report.btn.reopen') + " (Admin Only)"}
                 >
                   <RotateCcw size={16} />
                   {t('report.btn.reopen')}

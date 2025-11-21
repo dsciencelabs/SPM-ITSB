@@ -18,9 +18,10 @@ interface Props {
   onCreateAudit?: (audit: AuditSession) => void;
   onUpdateAudit?: (audit: AuditSession) => void;
   onDeleteAudit?: (id: string) => void;
+  onNavigate?: (view: ViewState) => void; // Added for redirection
 }
 
-const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, onUpdateAudit, onDeleteAudit }) => {
+const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, onUpdateAudit, onDeleteAudit, onNavigate }) => {
   const { t } = useLanguage();
   
   // --- CONTEXTS ---
@@ -140,13 +141,24 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
       // Find master questions for this standard to populate initial checklist
       const relevantQuestions = questions.filter(q => q.standard === scheduleForm.standard);
       
+      const startDate = new Date(scheduleForm.date);
+      // Auditee: 14 Days (2 Weeks)
+      const auditeeDeadline = new Date(startDate);
+      auditeeDeadline.setDate(startDate.getDate() + 14);
+
+      // Auditor: 21 Days (3 Weeks)
+      const auditorDeadline = new Date(startDate);
+      auditorDeadline.setDate(startDate.getDate() + 21);
+
       const newAudit: AuditSession = {
         id: Date.now().toString(),
         name: `Audit ${scheduleForm.department} - ${settings.auditPeriod}`,
         department: scheduleForm.department,
         standard: scheduleForm.standard,
         status: AuditStatus.PLANNED,
-        date: new Date(scheduleForm.date).toISOString(),
+        date: startDate.toISOString(),
+        auditeeDeadline: auditeeDeadline.toISOString(),
+        auditorDeadline: auditorDeadline.toISOString(),
         assignedAuditorId: scheduleForm.auditorId,
         questions: relevantQuestions.map(q => ({
           id: q.id,
@@ -194,9 +206,20 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
     if (!rescheduleState.audit || !onUpdateAudit) return;
 
     if (window.confirm(t('confirm.update'))) {
+      const newDate = new Date(rescheduleState.newDate);
+      
+      // Re-calculate deadlines based on new date
+      const auditeeDeadline = new Date(newDate);
+      auditeeDeadline.setDate(newDate.getDate() + 14);
+
+      const auditorDeadline = new Date(newDate);
+      auditorDeadline.setDate(newDate.getDate() + 21);
+
       const updatedAudit = {
         ...rescheduleState.audit,
-        date: new Date(rescheduleState.newDate).toISOString()
+        date: newDate.toISOString(),
+        auditeeDeadline: auditeeDeadline.toISOString(),
+        auditorDeadline: auditorDeadline.toISOString()
       };
       onUpdateAudit(updatedAudit);
       // Notification simulation (simulating email/system notification)
@@ -238,6 +261,11 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
     setTimeout(() => {
       setIsSavingSettings(false);
       alert("Pengaturan Sistem Berhasil Disimpan & Diterapkan.");
+      
+      // Redirect to Dashboard if navigation prop is provided
+      if (onNavigate) {
+        onNavigate('DASHBOARD');
+      }
     }, 800);
   };
 
@@ -724,7 +752,16 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-                <div className="pt-4 flex gap-3">
+                
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
+                   <p className="font-bold mb-1">Estimated Deadlines:</p>
+                   <ul className="list-disc pl-4 space-y-0.5">
+                      <li>Auditee (14 Days): {new Date(new Date(scheduleForm.date).getTime() + 14*24*60*60*1000).toLocaleDateString()}</li>
+                      <li>Auditor (21 Days): {new Date(new Date(scheduleForm.date).getTime() + 21*24*60*60*1000).toLocaleDateString()}</li>
+                   </ul>
+                </div>
+
+                <div className="pt-2 flex gap-3">
                   <button type="button" onClick={() => setIsScheduleModalOpen(false)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">Cancel</button>
                   <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md">Confirm Schedule</button>
                 </div>

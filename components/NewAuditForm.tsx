@@ -2,7 +2,7 @@
 import { useState, useEffect, FC, FormEvent } from 'react';
 import { AuditStandard, AuditSession, AuditStatus, AuditQuestion, UserRole } from '../types';
 import { generateChecklist } from '../services/geminiService';
-import { Sparkles, Loader2, ArrowRight, Plus, Trash2, Edit3, Save, ArrowLeft, GripVertical, AlertTriangle, Database, Bot, Filter, User, Lock, UserX, Send, CheckCircle2, FileText } from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, Plus, Trash2, Edit3, Save, ArrowLeft, GripVertical, AlertTriangle, Database, Bot, Filter, User, Lock, UserX, Send, CheckCircle2, FileText, CalendarClock } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 import { useMasterData } from '../MasterDataContext';
@@ -215,13 +215,26 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
     // Simulate network delay for better UX (Sending notification simulation)
     await new Promise(resolve => setTimeout(resolve, 1500));
 
+    const now = new Date();
+    
+    // CALCULATE DEADLINES
+    // Auditee: 14 Days (2 Weeks)
+    const auditeeDeadline = new Date(now);
+    auditeeDeadline.setDate(now.getDate() + 14);
+
+    // Auditor: 21 Days (2 Weeks Auditee + 1 Week Verification)
+    const auditorDeadline = new Date(now);
+    auditorDeadline.setDate(now.getDate() + 21);
+
     const newAudit: AuditSession = {
       id: Date.now().toString(),
       name: `Audit ${department} - ${settings.auditPeriod}`,
       department,
       standard,
       status: AuditStatus.IN_PROGRESS,
-      date: new Date().toISOString(),
+      date: now.toISOString(),
+      auditeeDeadline: auditeeDeadline.toISOString(),
+      auditorDeadline: auditorDeadline.toISOString(),
       questions: draftQuestions,
       assignedAuditorId: assignedAuditorId 
     };
@@ -232,7 +245,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
     setIsSubmitting(false);
 
     // Detailed Success Message
-    alert(`✅ Penugasan Berhasil Dikirim!\n\nSistem telah mengirimkan notifikasi audit kepada:\n• Auditor: ${auditorName}\n• Auditee: ${department}`);
+    alert(`✅ Penugasan Berhasil Dikirim!\n\n• Auditee Deadline: ${auditeeDeadline.toLocaleDateString()} (2 Minggu)\n• Auditor Deadline: ${auditorDeadline.toLocaleDateString()} (3 Minggu)\n\nNotifikasi telah dikirim ke ${auditorName} dan Unit ${department}`);
   };
 
   const getSelectedAuditorName = () => {
@@ -603,6 +616,14 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
              </div>
              
              <div className="p-6 space-y-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800">
+                   <p className="font-bold flex items-center gap-2 mb-1"><CalendarClock size={16} /> Batas Waktu Pelaksanaan</p>
+                   <ul className="list-disc list-inside pl-1 space-y-1 text-xs">
+                      <li>Auditee Deadline: <strong>2 Minggu</strong></li>
+                      <li>Auditor Deadline: <strong>3 Minggu</strong> (Total)</li>
+                   </ul>
+                </div>
+
                 <div className="space-y-3">
                    {/* Auditor */}
                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">

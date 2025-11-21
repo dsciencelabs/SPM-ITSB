@@ -59,6 +59,11 @@ export interface AuditSession {
   standard: AuditStandard;
   status: AuditStatus;
   date: string;
+  
+  // Deadlines
+  auditeeDeadline?: string; // Deadline for Auditee (2 Weeks)
+  auditorDeadline?: string; // Deadline for Auditor (3 Weeks)
+
   assignedAuditorId?: string; // Link to specific auditor
   questions: AuditQuestion[];
   aiSummary?: string;
