@@ -1,7 +1,7 @@
 
 import { FC, ElementType } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
-import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -55,6 +55,7 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
   const filteredAudits = getFilteredAudits();
   const completed = filteredAudits.filter(a => a.status === AuditStatus.COMPLETED).length;
   const inProgress = filteredAudits.filter(a => a.status === AuditStatus.IN_PROGRESS).length;
+  const submitted = filteredAudits.filter(a => a.status === AuditStatus.SUBMITTED).length;
   const total = filteredAudits.length;
 
   const canCreateAudit = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
@@ -119,8 +120,8 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard title={t('dash.total')} value={total} icon={BarChart3} color="bg-blue-500" />
           <StatCard title={t('dash.inProgress')} value={inProgress} icon={Clock} color="bg-amber-500" />
+          <StatCard title="Menunggu Verifikasi" value={submitted} icon={Send} color="bg-purple-500" />
           <StatCard title={t('dash.completed')} value={completed} icon={CheckCircle2} color="bg-green-500" />
-          <StatCard title={t('dash.findings')} value={Math.floor(Math.random() * 5)} icon={AlertTriangle} color="bg-red-500" />
         </div>
 
         {/* Recent History Table - Full Width */}
@@ -161,10 +162,11 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' : 
+                          audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-800' :
                           audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-800' : 
                           'bg-slate-100 text-slate-600'
                         }`}>
-                          {audit.status}
+                          {audit.status === AuditStatus.SUBMITTED ? 'Diserahkan (Verifikasi)' : audit.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-500">{new Date(audit.date).toLocaleDateString('id-ID')}</td>

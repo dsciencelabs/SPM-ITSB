@@ -317,7 +317,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                           </div>
                           {hasMasterData ? (
                             <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
-                               <Database size={10} /> Instrumen Tersedia
+                               <Database size={10} /> Instrumen Baku Tersedia
                             </span>
                           ) : (
                             <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">

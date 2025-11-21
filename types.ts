@@ -9,6 +9,7 @@ export enum AuditStandard {
 export enum AuditStatus {
   PLANNED = 'Planned',
   IN_PROGRESS = 'In Progress',
+  SUBMITTED = 'Submitted', // Auditee submitted, waiting for Auditor verification
   COMPLETED = 'Completed'
 }
 

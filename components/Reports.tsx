@@ -1,7 +1,8 @@
+
 import { useState, FC } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
@@ -197,6 +198,10 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                              <span className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 w-fit">
                                <CheckCircle size={12} /> {t('repo.completed')}
                              </span>
+                           ) : a.status === AuditStatus.SUBMITTED ? (
+                             <span className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100 w-fit">
+                               <Send size={12} /> Submitted
+                             </span>
                            ) : (
                              <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
                                <Clock size={12} /> {t('repo.progress')}
@@ -205,7 +210,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-3">
-                            {canReopen && a.status === AuditStatus.COMPLETED && (
+                            {canReopen && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.SUBMITTED) && (
                               <button
                                 onClick={(e) => handleReopenFromList(a, e)}
                                 className="text-amber-600 hover:text-amber-800 text-sm font-medium bg-amber-50 hover:bg-amber-100 p-1.5 rounded transition-colors border border-amber-200"
@@ -382,13 +387,15 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
              <span className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border ${
                 audit.status === AuditStatus.COMPLETED 
                   ? 'bg-green-50 text-green-700 border-green-100' 
+                  : audit.status === AuditStatus.SUBMITTED
+                  ? 'bg-purple-50 text-purple-700 border-purple-100'
                   : 'bg-amber-50 text-amber-700 border-amber-100'
              }`}>
                 {audit.status === AuditStatus.COMPLETED ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                {audit.status === AuditStatus.COMPLETED ? t('repo.completed') : t('repo.progress')}
+                {audit.status}
              </span>
              
-             {canReopen && audit.status === AuditStatus.COMPLETED && (
+             {canReopen && (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.SUBMITTED) && (
                 <button 
                   onClick={handleReopenAudit}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm border border-amber-200"

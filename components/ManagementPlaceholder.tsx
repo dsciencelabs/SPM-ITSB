@@ -651,7 +651,9 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
                             <td className="px-6 py-3 font-medium">{audit.department}</td>
                             <td className="px-6 py-3">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-700' : 
+                                audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-700' :
+                                'bg-amber-100 text-amber-700'
                               }`}>
                                 {audit.status}
                               </span>

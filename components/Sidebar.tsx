@@ -1,3 +1,4 @@
+
 import { useState, FC } from 'react';
 import { 
   LayoutDashboard, 
@@ -51,10 +52,9 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         return [
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock }, 
-          // ONLY Super Admin sees User Management and Master Data
           { id: 'USER_MGMT', label: 'User Management', icon: Users },
-          { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database },
           { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox },
+          { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
           { id: 'REPORT', label: 'All Reports', icon: PieChart },
@@ -65,11 +65,11 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         return [
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock },
-          // Admin does NOT see User Management or Master Data
+          // REMOVED: User Management & Master Data (Super Admin only)
           { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart }, // Admin sees All Reports
+          { id: 'AUDIT_EXECUTION', label: t('nav.execution'), icon: ClipboardList },
+          { id: 'REPORT', label: 'All Reports', icon: PieChart },
         ];
 
       case UserRole.AUDITOR_LEAD:
@@ -77,9 +77,9 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Jadwal & Penugasan', icon: CalendarClock },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
+          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, // Enabled
           { id: 'AUDIT_EXECUTION', label: 'All Active Audits', icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart }, // Lead Auditor sees All Reports
+          { id: 'REPORT', label: 'All Reports', icon: PieChart },
         ];
 
       case UserRole.AUDITOR:

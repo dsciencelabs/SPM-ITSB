@@ -129,13 +129,13 @@ const MOCK_AUDITS: AuditSession[] = [
     ],
   },
 
-  // 4. ACTIVE AUDIT - LP3B (Partially filled)
+  // 4. ACTIVE AUDIT - LP3B (Example of SUBMITTED state)
   {
     id: 'audit-lp3b-001',
     name: 'Audit Pengembangan Pembelajaran LP3B',
     department: 'LP3B',
     standard: AuditStandard.PERMENDIKTISAINTEK_2025,
-    status: AuditStatus.IN_PROGRESS,
+    status: AuditStatus.SUBMITTED, // AUDITEE HAS SUBMITTED!
     date: new Date().toISOString(),
     auditeeDeadline: new Date(Date.now() + 1209600000).toISOString(),
     auditorDeadline: new Date(Date.now() + 1814400000).toISOString(),
@@ -147,8 +147,8 @@ const MOCK_AUDITS: AuditSession[] = [
          questionText: 'Persentase mata kuliah yang telah menggunakan metode Case Method dan Team Based Project.',
          auditeeSelfAssessment: 'Compliant',
          evidence: 'https://lp3b.itsb.ac.id/laporan-rps-2024',
-         compliance: 'Compliant',
-         auditorNotes: 'Cukup baik, 60% MK sudah menerapkan.',
+         compliance: null, // Auditor needs to verify this now
+         auditorNotes: '',
        }
     ],
   },
@@ -161,6 +161,8 @@ const MOCK_AUDITS: AuditSession[] = [
     standard: AuditStandard.LAM_TEKNIK,
     status: AuditStatus.PLANNED,
     date: '2024-12-20T09:00:00Z',
+    auditeeDeadline: '2025-01-03T09:00:00Z',
+    auditorDeadline: '2025-01-10T09:00:00Z',
     assignedAuditorId: 'pwk-auditor', // Cross audit from PWK
     questions: [],
   },
@@ -173,11 +175,13 @@ const MOCK_AUDITS: AuditSession[] = [
     standard: AuditStandard.BAN_PT,
     status: AuditStatus.PLANNED,
     date: '2025-01-10T09:00:00Z',
+    auditeeDeadline: '2025-01-24T09:00:00Z',
+    auditorDeadline: '2025-01-31T09:00:00Z',
     assignedAuditorId: 'au-lpm',
     questions: [],
   },
 
-  // 7. NEW: Audit Dir DikMa (Planned)
+  // 7. Audit Dir DikMa (Planned)
   {
     id: 'audit-dikma-plan',
     name: 'Audit Layanan Akademik & Kemahasiswaan',
@@ -185,11 +189,13 @@ const MOCK_AUDITS: AuditSession[] = [
     standard: AuditStandard.PERMENDIKTISAINTEK_2025,
     status: AuditStatus.PLANNED,
     date: '2025-02-15T09:00:00Z',
+    auditeeDeadline: '2025-03-01T09:00:00Z',
+    auditorDeadline: '2025-03-08T09:00:00Z',
     assignedAuditorId: 'au-lpm', 
     questions: [],
   },
 
-  // 8. NEW: Audit Perpustakaan (In Progress)
+  // 8. Audit Perpustakaan (In Progress)
   {
     id: 'audit-lib-001',
     name: 'Audit Standar Perpustakaan Nasional',
@@ -213,7 +219,7 @@ const MOCK_AUDITS: AuditSession[] = [
     ],
   },
   
-  // 9. NEW: Audit Dir Sistem Informasi (Completed)
+  // 9. Audit Dir Sistem Informasi (Completed)
   {
     id: 'audit-si-complete',
     name: 'Audit Pengembangan Sistem Informasi Terintegrasi',
@@ -221,6 +227,8 @@ const MOCK_AUDITS: AuditSession[] = [
     standard: AuditStandard.PERMENDIKTISAINTEK_2025,
     status: AuditStatus.COMPLETED,
     date: '2024-11-20T09:00:00Z',
+    auditeeDeadline: '2024-12-04T09:00:00Z',
+    auditorDeadline: '2024-12-11T09:00:00Z',
     assignedAuditorId: 'it-auditor', // Internal IT Auditor for SI
     aiSummary: 'Direktorat Sistem Informasi telah berhasil mengintegrasikan 80% layanan akademik ke dalam portal tunggal. Kepatuhan terhadap standar keamanan data sangat baik.',
     aiRecommendations: ['Perlu peningkatan kapasitas server untuk periode KRS.', 'Implementasi SSO untuk layanan eksternal.'],
@@ -240,7 +248,7 @@ const MOCK_AUDITS: AuditSession[] = [
   },
 ];
 
-const STORAGE_KEY = 'ami_smart_audits_v7'; // Bumped version to load new mocks with deadlines
+const STORAGE_KEY = 'ami_smart_audits_v9'; // Bumped version to load new mocks with deadlines and SUBMITTED status
 
 const AppContent: FC = () => {
   const { currentUser } = useAuth();

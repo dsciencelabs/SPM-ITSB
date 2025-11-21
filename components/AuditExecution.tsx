@@ -1,7 +1,7 @@
 
 import { useState, useEffect, FC } from 'react';
 import { AuditSession, AuditQuestion, AuditStatus, UserRole } from '../types';
-import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock, Cloud } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock, Cloud, Send, ShieldAlert } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -47,6 +47,9 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   useEffect(() => {
     if (!audit) return;
 
+    // Don't autosave if completed
+    if (audit.status === AuditStatus.COMPLETED) return;
+
     const autoSaveInterval = setInterval(() => {
       if (localQuestions.length > 0) {
         const key = `sami_autosave_${audit.id}`;
@@ -55,6 +58,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         localStorage.setItem(key, JSON.stringify(localQuestions));
         
         // 2. Sync to Parent/App State (Main Persistence)
+        // Preserve current status during autosave
         onUpdateAudit({ ...audit, questions: localQuestions });
         
         setLastAutoSave(new Date());
@@ -76,15 +80,23 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     );
   }
 
-  // --- PERMISSION LOGIC ---
+  // --- PERMISSION & LOGIC FLOW ---
   const role = currentUser?.role;
   const isAdmin = role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+  
   const isAuditor = role === UserRole.AUDITOR || role === UserRole.AUDITOR_LEAD || isAdmin;
   const isAuditee = role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD || isAdmin; 
-  const canEditFinalVerdict = isAuditor;
-  const canEditClaim = isAuditee; 
+  
+  const auditStatus = audit.status;
 
-  // Toggle logic for the main row expansion
+  // --- ACCESS RULES ---
+  
+  // Auditee can edit if status is IN_PROGRESS
+  const canAuditeeEdit = isAuditee && auditStatus === AuditStatus.IN_PROGRESS;
+  
+  // Auditor can edit verdict if IN_PROGRESS or SUBMITTED (but can only Finalize if SUBMITTED)
+  const canAuditorEdit = isAuditor && (auditStatus === AuditStatus.IN_PROGRESS || auditStatus === AuditStatus.SUBMITTED);
+
   const handleToggleExpand = (id: string) => {
     if (expandedId === id) {
       setExpandedId(null);
@@ -95,17 +107,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
 
   // Auditor: Set Final Verdict
   const handleComplianceChange = (questionId: string, status: AuditQuestion['compliance']) => {
-    const question = localQuestions.find(q => q.id === questionId);
-    const auditeeHasFilled = !!question?.auditeeSelfAssessment && !!question?.evidence;
-
-    if (!canEditFinalVerdict) return;
-
-    // STRICT CHECK: Auditor Block
-    if (!auditeeHasFilled && !isAuditee) { 
-       alert("Akses Terkunci: Auditee harus melengkapi Klaim Self-Assessment DAN Bukti (URL/Teks) pada butir ini sebelum diverifikasi.");
-       return;
-    }
-
+    if (!canAuditorEdit) return;
     setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, compliance: status } : q
     ));
@@ -113,26 +115,27 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
 
   // Auditee: Set Self Assessment Claim
   const handleSelfAssessmentChange = (questionId: string, status: AuditQuestion['auditeeSelfAssessment']) => {
-    if (!canEditClaim) return;
+    if (!canAuditeeEdit) return;
     setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, auditeeSelfAssessment: status } : q
     ));
   };
 
   const handleTextChange = (questionId: string, field: keyof AuditQuestion, value: string) => {
-    if (field === 'auditorNotes') {
-        const question = localQuestions.find(q => q.id === questionId);
-        const auditeeHasFilled = !!question?.auditeeSelfAssessment && !!question?.evidence;
-        if (!canEditFinalVerdict || (!auditeeHasFilled && !isAuditee)) return; 
-    }
-
+    if (field === 'auditorNotes' && !canAuditorEdit) return;
+    if (field === 'actionPlan' && !canAuditeeEdit) return;
+    
     setLocalQuestions(prev => prev.map(q => 
       q.id === questionId ? { ...q, [field]: value } : q
     ));
   };
 
   const handleEvidenceChange = (questionId: string, value: string) => {
-    handleTextChange(questionId, 'evidence', value);
+    if (!canAuditeeEdit) return;
+
+    setLocalQuestions(prev => prev.map(q => 
+        q.id === questionId ? { ...q, evidence: value } : q
+    ));
     
     if (!value.trim()) {
       setUrlErrors(prev => {
@@ -163,12 +166,10 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
 
   // Manual Save Draft
   const handleSaveDraft = () => {
-    if (!window.confirm(t('confirm.save'))) return;
-
     setIsSaving(true);
     const key = `sami_autosave_${audit.id}`;
     localStorage.setItem(key, JSON.stringify(localQuestions));
-    onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.IN_PROGRESS });
+    onUpdateAudit({ ...audit, questions: localQuestions }); // Keep existing status
     setLastAutoSave(new Date());
     
     setTimeout(() => {
@@ -176,9 +177,33 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     }, 800);
   };
 
-  // Complete Audit
-  const handleCompleteAudit = () => {
-    if (confirm(t('exec.confirm'))) {
+  // --- ACTION BUTTONS HANDLERS ---
+
+  // 1. AUDITEE SUBMIT
+  const handleAuditeeSubmit = () => {
+    const incomplete = localQuestions.filter(q => !q.auditeeSelfAssessment || !q.evidence);
+    if (incomplete.length > 0) {
+        if (!confirm(`Masih ada ${incomplete.length} butir yang belum lengkap klaim/buktinya. Yakin ingin menyerahkan ke Auditor?`)) {
+            return;
+        }
+    } else {
+        if (!confirm("Apakah Anda yakin ingin menyelesaikan pengisian? Data akan dikunci dan diserahkan ke Auditor.")) {
+            return;
+        }
+    }
+
+    onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.SUBMITTED });
+    alert("✅ Audit berhasil diserahkan ke Auditor untuk verifikasi.");
+  };
+
+  // 2. AUDITOR FINALIZE
+  const handleAuditorComplete = () => {
+    if (audit.status !== AuditStatus.SUBMITTED) {
+        alert("Anda belum bisa menyelesaikan audit ini karena Auditee belum melakukan Submit.");
+        return;
+    }
+
+    if (confirm("Finalisasi Audit? Status akan menjadi COMPLETED dan laporan akan diterbitkan.")) {
       onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.COMPLETED });
       onComplete();
     }
@@ -193,11 +218,11 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
 
   // Weighted Progress Calculation
   const totalQuestions = localQuestions.length;
-  const progressMode = (role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD) ? 'AUDITEE' : 'AUDITOR';
+  const progressMode = (isAuditee && !isAuditor) ? 'AUDITEE' : 'AUDITOR';
   
   const answeredQuestions = localQuestions.filter(q => {
       if (progressMode === 'AUDITOR') {
-        return q.compliance !== null || (q.auditorNotes && q.auditorNotes.trim().length > 0);
+        return q.compliance !== null;
       }
       return q.auditeeSelfAssessment !== null || (q.evidence && q.evidence.trim().length > 0);
   }).length;
@@ -235,7 +260,13 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
             <div className="text-slate-500 text-xs flex items-center gap-4">
                 <span>ID: {audit.id}</span>
                 <span>•</span>
-                <span>Started: {new Date(audit.date).toLocaleDateString()}</span>
+                <span className={`font-bold px-2 py-0.5 rounded ${
+                    audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-700' :
+                    audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-700' :
+                    audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-100'
+                }`}>
+                    Status: {audit.status}
+                </span>
             </div>
             
             {/* DEADLINE BADGES */}
@@ -265,36 +296,72 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
               <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mr-2">
                  <Cloud size={14} className={lastAutoSave ? "text-green-500" : "text-slate-300"} />
                  {lastAutoSave 
-                    ? `Auto-saved ${lastAutoSave.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
-                    : 'Auto-save active (60s)'}
+                    ? `Saved ${lastAutoSave.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                    : 'Auto-save on'}
               </div>
 
-              <button 
-                onClick={handleSaveDraft}
-                disabled={isSaving}
-                className={`px-5 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-sm border ${
-                  isSaving 
-                    ? 'bg-blue-50 text-blue-400 border-blue-100 cursor-wait' 
-                    : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                }`}
-              >
-                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                {isSaving ? t('exec.btn.saving') : t('exec.btn.save')}
-              </button>
+              {/* Common Save Draft Button (Available to ALL if not completed) */}
+              {audit.status !== AuditStatus.COMPLETED && (
+                  <button 
+                    onClick={handleSaveDraft}
+                    disabled={isSaving}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-sm border ${
+                      isSaving 
+                        ? 'bg-blue-50 text-blue-400 border-blue-100 cursor-wait' 
+                        : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
+                    }`}
+                  >
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {t('exec.btn.save')}
+                  </button>
+              )}
 
-              {/* Only Auditor/Lead/Admin can Finalize */}
-              {canEditFinalVerdict && (
+              {/* AUDITEE SUBMIT BUTTON */}
+              {isAuditee && audit.status === AuditStatus.IN_PROGRESS && (
+                  <button 
+                    onClick={handleAuditeeSubmit}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-blue-200"
+                  >
+                    <Send size={18} />
+                    Selesai & Kirim
+                  </button>
+              )}
+
+              {/* AUDITOR FINALIZE BUTTON */}
+              {isAuditor && audit.status !== AuditStatus.COMPLETED && (
                 <button 
-                  onClick={handleCompleteAudit}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-green-200"
+                  onClick={handleAuditorComplete}
+                  disabled={audit.status !== AuditStatus.SUBMITTED}
+                  className={`px-5 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm border ${
+                      audit.status === AuditStatus.SUBMITTED
+                      ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-green-200 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  }`}
+                  title={audit.status !== AuditStatus.SUBMITTED ? "Menunggu Auditee menyelesaikan pengisian (Submit)." : "Finalisasi Audit"}
                 >
-                  <CheckCircle size={18} />
+                  {audit.status !== AuditStatus.SUBMITTED ? <Lock size={18} /> : <CheckCircle size={18} />}
                   {t('exec.btn.complete')}
                 </button>
               )}
             </div>
           </div>
         </div>
+
+        {/* STATUS BANNER FOR AUDITOR */}
+        {isAuditor && audit.status === AuditStatus.IN_PROGRESS && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center gap-3 text-sm text-amber-800">
+                <Clock size={20} className="text-amber-600" />
+                <span><strong>Menunggu Auditee:</strong> Auditee sedang melengkapi data. Anda dapat menyimpan draft, tetapi tombol "Selesai Audit" hanya akan aktif setelah Auditee melakukan Submit.</span>
+            </div>
+        )}
+
+        {/* STATUS BANNER FOR AUDITEE */}
+        {isAuditee && audit.status === AuditStatus.SUBMITTED && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4 flex items-center gap-3 text-sm text-purple-800">
+                <ShieldAlert size={20} className="text-purple-600" />
+                <span><strong>Audit Diserahkan:</strong> Data telah dikunci dan sedang dalam proses verifikasi oleh Auditor. Anda tidak dapat mengubah data saat ini.</span>
+            </div>
+        )}
         
         {/* Progress Bar */}
         <div className="space-y-2 mt-4">
@@ -332,9 +399,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
           
           const isVerified = !!q.compliance;
           const isClaimed = !!q.auditeeSelfAssessment;
-          
-          const auditeeHasFilled = !!q.auditeeSelfAssessment && !!q.evidence;
-          const canAuditorAction = canEditFinalVerdict && auditeeHasFilled;
           
           let borderColor = 'border-slate-200';
           if (isVerified) {
@@ -399,10 +463,17 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                 <div className="animate-fade-in">
                    
                    {/* AREA AUDITEE */}
-                   <div className="p-5 bg-slate-50/80 border-t border-slate-100">
-                      <div className="flex items-center gap-2 mb-4 text-blue-700 font-bold text-sm uppercase tracking-wider">
-                         <Building2 size={16} />
-                         Area Auditee: Klaim & Bukti
+                   <div className={`p-5 border-t border-slate-100 ${canAuditeeEdit ? 'bg-slate-50/80' : 'bg-slate-100/50 opacity-90'}`}>
+                      <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2 text-blue-700 font-bold text-sm uppercase tracking-wider">
+                             <Building2 size={16} />
+                             Area Auditee: Klaim & Bukti
+                          </div>
+                          {!canAuditeeEdit && (
+                              <span className="text-xs text-slate-500 bg-slate-200 px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Lock size={10} /> Locked
+                              </span>
+                          )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -414,12 +485,12 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                  <button
                                    key={status}
                                    onClick={() => handleSelfAssessmentChange(q.id, status as AuditQuestion['auditeeSelfAssessment'])}
-                                   disabled={!canEditClaim}
+                                   disabled={!canAuditeeEdit}
                                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
                                      q.auditeeSelfAssessment === status 
                                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-blue-50'
-                                   } ${!canEditClaim ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                   } ${!canAuditeeEdit ? 'cursor-not-allowed opacity-70' : ''}`}
                                  >
                                    {status}
                                  </button>
@@ -441,9 +512,9 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                type="text"
                                value={q.evidence || ''}
                                onChange={(e) => handleEvidenceChange(q.id, e.target.value)}
-                               disabled={!canEditClaim}
+                               disabled={!canAuditeeEdit}
                                placeholder="https://..."
-                               className={`w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-100 ${
+                               className={`w-full px-3 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-200 ${
                                  urlErrors[q.id] ? 'border-red-300 bg-red-50' : 'border-slate-300'
                                }`}
                             />
@@ -452,40 +523,23 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                    </div>
 
                    {/* AREA AUDITOR */}
-                   <div className="p-5 bg-white border-t border-slate-200 relative">
+                   <div className={`p-5 border-t border-slate-200 relative ${canAuditorEdit ? 'bg-white' : 'bg-slate-50'}`}>
                       <div className="flex items-center justify-between mb-4">
                          <div className="flex items-center gap-2 text-slate-800 font-bold text-sm uppercase tracking-wider">
                             <UserCheck size={16} className="text-slate-600" />
                             Area Auditor: Verifikasi & Keputusan
                          </div>
-                         {!canAuditorAction && canEditFinalVerdict && (
-                            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
-                               <Lock size={10}/> Menunggu Lengkap (Klaim & Bukti)
-                            </span>
-                         )}
-                         {!canEditFinalVerdict && !isAuditee && (
+                         {!canAuditorEdit && (
                              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
                                  <Lock size={10}/> Read Only
                              </span>
                          )}
                       </div>
 
-                      {canEditFinalVerdict && !auditeeHasFilled && (
-                         <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 shadow-sm">
-                            <AlertCircle size={20} className="text-amber-600 mt-0.5" />
-                            <div>
-                               <p className="text-sm font-bold text-amber-800">Akses Terkunci</p>
-                               <p className="text-xs text-amber-700 mt-1">
-                                 Anda tidak dapat memberikan penilaian (verifikasi) atau catatan sebelum Auditee melengkapi <strong>Klaim Kepatuhan</strong> dan <strong>Bukti</strong>.
-                               </p>
-                            </div>
-                         </div>
-                      )}
-
                       {q.auditeeSelfAssessment && (
                          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between animate-fade-in">
                             <span className="text-xs text-blue-700 font-medium">Klaim Auditee: <strong>{q.auditeeSelfAssessment}</strong></span>
-                            {canEditFinalVerdict && (
+                            {canAuditorEdit && (
                                <span className="text-[10px] text-blue-500">Silakan verifikasi bukti di atas sebelum memutuskan.</span>
                             )}
                          </div>
@@ -500,16 +554,16 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                  <button
                                    key={status}
                                    onClick={() => handleComplianceChange(q.id, status as AuditQuestion['compliance'])}
-                                   disabled={!canAuditorAction}
+                                   disabled={!canAuditorEdit}
                                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
                                      q.compliance === status 
                                        ? status === 'Compliant' ? 'bg-green-600 text-white border-green-700' 
                                        : status === 'Non-Compliant' ? 'bg-red-600 text-white border-red-700'
                                        : 'bg-amber-500 text-white border-amber-600'
                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                                   } ${!canAuditorAction ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                   } ${!canAuditorEdit ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                                  >
-                                   {!canAuditorAction && <Lock size={10} />}
+                                   {!canAuditorEdit && <Lock size={10} />}
                                    {status === 'Compliant' ? 'Valid (C)' : status === 'Non-Compliant' ? 'Tidak (NC)' : 'Obs (OB)'}
                                  </button>
                                ))}
@@ -525,9 +579,9 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                rows={5}
                                value={q.auditorNotes || ''}
                                onChange={(e) => handleTextChange(q.id, 'auditorNotes', e.target.value)}
-                               disabled={!canAuditorAction}
-                               placeholder={canAuditorAction ? "Tuliskan detail temuan, observasi, atau rekomendasi perbaikan di sini..." : "Menunggu Auditee (Klaim & Bukti)..."}
-                               className="w-full px-4 py-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-400 shadow-sm transition-all resize-y placeholder:text-slate-400"
+                               disabled={!canAuditorEdit}
+                               placeholder={canAuditorEdit ? "Tuliskan detail temuan, observasi, atau rekomendasi perbaikan di sini..." : "Read Only"}
+                               className="w-full px-4 py-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 disabled:text-slate-500 shadow-sm transition-all resize-y placeholder:text-slate-400"
                             />
                          </div>
                       </div>
@@ -548,7 +602,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                    rows={3}
                                    value={q.actionPlan || ''}
                                    onChange={(e) => handleTextChange(q.id, 'actionPlan', e.target.value)}
-                                   disabled={!isAuditee} 
+                                   disabled={!canAuditeeEdit} 
                                    placeholder="Jelaskan langkah konkret perbaikan yang akan dilakukan..."
                                    className="w-full px-4 py-2 rounded-lg border border-amber-200 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50 transition-all shadow-sm placeholder:text-slate-400 bg-white"
                                  />
@@ -559,12 +613,12 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                    type="date"
                                    value={q.actionPlanDeadline || ''}
                                    onChange={(e) => handleTextChange(q.id, 'actionPlanDeadline', e.target.value)}
-                                   disabled={!isAuditee}
+                                   disabled={!canAuditeeEdit}
                                    className="w-full px-4 py-2 rounded-lg border border-amber-200 text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-slate-50 transition-all shadow-sm bg-white text-slate-700"
                                  />
                              </div>
                          </div>
-                         {isAuditee && (
+                         {canAuditeeEdit && (
                             <p className="text-[10px] text-amber-600 mt-3 italic flex items-center gap-1">
                                <AlertCircle size={10} />
                                Wajib diisi oleh Auditee sebagai komitmen perbaikan atas temuan audit.
