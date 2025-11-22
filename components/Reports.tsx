@@ -1,12 +1,12 @@
-
-import { useState, FC } from 'react';
+import { useState, FC, useMemo } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
+import { useSettings } from '../SettingsContext';
 
 interface ReportsProps {
   audit: AuditSession | null;
@@ -16,9 +16,112 @@ interface ReportsProps {
   onBackToList?: () => void;
 }
 
+// --- SIMPLE RADAR CHART COMPONENT (Internal) ---
+const SimpleRadarChart = ({ data }: { data: { name: string; score: number }[] }) => {
+  const size = 300;
+  const center = size / 2;
+  const radius = (size / 2) - 40; // Padding for labels
+  const levels = 4; // 25%, 50%, 75%, 100%
+
+  if (data.length < 3) {
+    return (
+      <div className="h-[300px] flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        <Activity size={32} className="mb-2 opacity-50" />
+        <p className="text-sm">Butuh minimal 3 kategori untuk grafik radar.</p>
+      </div>
+    );
+  }
+
+  // Helper to calculate coordinates
+  const getCoordinates = (value: number, index: number, total: number) => {
+    const angle = (Math.PI * 2 * index) / total - (Math.PI / 2);
+    const r = (value / 100) * radius;
+    const x = center + r * Math.cos(angle);
+    const y = center + r * Math.sin(angle);
+    return { x, y };
+  };
+
+  // Generate Polygon Points
+  const polygonPoints = data.map((d, i) => {
+    const { x, y } = getCoordinates(d.score, i, data.length);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div className="flex items-center justify-center py-4">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* Grid Circles (Levels) */}
+        {[...Array(levels)].map((_, i) => {
+          const levelRadius = (radius / levels) * (i + 1);
+          return (
+            <circle
+              key={`level-${i}`}
+              cx={center}
+              cy={center}
+              r={levelRadius}
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth="1"
+            />
+          );
+        })}
+
+        {/* Axes Lines */}
+        {data.map((_, i) => {
+          const { x, y } = getCoordinates(100, i, data.length);
+          return (
+            <line
+              key={`axis-${i}`}
+              x1={center}
+              y1={center}
+              x2={x}
+              y2={y}
+              stroke="#e2e8f0"
+              strokeWidth="1"
+            />
+          );
+        })}
+
+        {/* Data Polygon */}
+        <polygon
+          points={polygonPoints}
+          fill="rgba(37, 99, 235, 0.2)" // Blue-600 with opacity
+          stroke="#2563eb"
+          strokeWidth="2"
+        />
+
+        {/* Data Points & Labels */}
+        {data.map((d, i) => {
+          const point = getCoordinates(d.score, i, data.length);
+          const labelPoint = getCoordinates(120, i, data.length); // Push label further out
+
+          return (
+            <g key={`point-${i}`}>
+              <circle cx={point.x} cy={point.y} r="4" fill="#2563eb" />
+              <text
+                x={labelPoint.x}
+                y={labelPoint.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="10"
+                fill="#475569"
+                fontWeight="500"
+              >
+                {d.name.length > 15 ? d.name.substring(0, 12) + '...' : d.name} ({d.score}%)
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+// -----------------------------------------------
+
 const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit, onBackToList }) => {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
+  const { settings } = useSettings(); // Access settings for App/SPM Logo
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>(['Compliant', 'Non-Compliant', 'Observation']);
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,11 +130,35 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   const [repoStatusFilter, setRepoStatusFilter] = useState<'ALL' | AuditStatus>('ALL');
 
   // GLOBAL PERMISSION CHECK
-  // Explicitly allow SuperAdmin and Admin to view all and perform actions like Reopen
   const isAdmin = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
   
   // Reopen Permission specifically
   const canReopen = isAdmin;
+
+  // CALCULATE RADAR DATA MEMO
+  const radarData = useMemo(() => {
+    if (!audit) return [];
+    
+    const groups: Record<string, { total: number; compliant: number }> = {};
+
+    audit.questions.forEach(q => {
+      // Simplify category name if needed (e.g., "C.1 Visi Misi" -> "C.1")
+      // For now, using full category or simplified splitting
+      const cat = q.category.split('-')[0].trim(); // Take part before hyphen if exists
+      
+      if (!groups[cat]) groups[cat] = { total: 0, compliant: 0 };
+      
+      groups[cat].total += 1;
+      if (q.compliance === 'Compliant') {
+        groups[cat].compliant += 1;
+      }
+    });
+
+    return Object.entries(groups).map(([name, stats]) => ({
+      name,
+      score: Math.round((stats.compliant / stats.total) * 100)
+    }));
+  }, [audit]);
 
   // Helper to Re-open from List View
   const handleReopenFromList = (targetAudit: AuditSession, e: React.MouseEvent) => {
@@ -281,21 +408,58 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
     return activeFilters.includes(q.compliance);
   });
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
 
+    // --- LOAD IMAGES (ITSB & SPM/App Logo) ---
+    const getDataUrl = (url: string): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = url;
+      });
+    };
+
+    // 1. ITSB Logo (Official Wiki Commons)
+    const itsbLogoUrl = "https://upload.wikimedia.org/wikipedia/commons/2/28/Logo_ITSB_Baru.png";
+    const itsbLogoBase64 = await getDataUrl(itsbLogoUrl);
+
+    // 2. SPM/App Logo (From Settings OR Default Placeholder)
+    const spmLogoBase64 = settings.logoUrl 
+        ? settings.logoUrl 
+        : await getDataUrl("https://cdn-icons-png.flaticon.com/512/9561/9561526.png"); // Generic Blue Shield/Audit Icon
+
+    // --- RENDER HEADER ---
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(t('report.title'), 14, 20);
+    doc.text(t('report.title'), 14, 22);
+
+    // Render Logos (Top Right)
+    // Posisi: ITSB paling kanan, SPM sebelah kirinya
+    if (itsbLogoBase64) {
+        doc.addImage(itsbLogoBase64, 'PNG', pageWidth - 25, 10, 15, 15); // x: ~185
+    }
+    if (spmLogoBase64) {
+        doc.addImage(spmLogoBase64, 'PNG', pageWidth - 45, 10, 15, 15); // x: ~165
+    }
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(80);
-    doc.text(`${t('new.label.dept')}: ${audit.department}`, 14, 30);
-    doc.text(`${t('new.label.std')}: ${audit.standard}`, 14, 35);
-    doc.text(`${t('dash.th.date')}: ${new Date(audit.date).toLocaleDateString()}`, 14, 40);
-    doc.text(`${t('dash.th.status')}: ${audit.status}`, 14, 45);
+    doc.text(`${t('new.label.dept')}: ${audit.department}`, 14, 32);
+    doc.text(`${t('new.label.std')}: ${audit.standard}`, 14, 37);
+    doc.text(`${t('dash.th.date')}: ${new Date(audit.date).toLocaleDateString()}`, 14, 42);
+    doc.text(`${t('dash.th.status')}: ${audit.status}`, 14, 47);
 
     let yPos = 55;
 
@@ -417,18 +581,45 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm text-slate-500 font-medium mb-1">{t('report.compliant')}</p>
-          <p className="text-4xl font-bold text-green-600">{compliantCount}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Summary Cards */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.compliant')}</p>
+              <p className="text-3xl font-bold text-green-600">{compliantCount}</p>
+            </div>
+            <div className="bg-green-50 p-3 rounded-full text-green-600"><CheckCircle size={24} /></div>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.nc')}</p>
+              <p className="text-3xl font-bold text-red-600">{nonCompliantCount}</p>
+            </div>
+            <div className="bg-red-50 p-3 rounded-full text-red-600"><XCircle size={24} /></div>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.ob')}</p>
+              <p className="text-3xl font-bold text-amber-600">{observationCount}</p>
+            </div>
+            <div className="bg-amber-50 p-3 rounded-full text-amber-600"><AlertCircle size={24} /></div>
+          </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm text-slate-500 font-medium mb-1">{t('report.nc')}</p>
-          <p className="text-4xl font-bold text-red-600">{nonCompliantCount}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-sm text-slate-500 font-medium mb-1">{t('report.ob')}</p>
-          <p className="text-4xl font-bold text-amber-600">{observationCount}</p>
+
+        {/* Radar Chart Section */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
+               </h3>
+               <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                  % Kepatuhan per Kategori
+               </span>
+            </div>
+            <div className="flex justify-center">
+               <SimpleRadarChart data={radarData} />
+            </div>
         </div>
       </div>
 
