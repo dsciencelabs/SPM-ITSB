@@ -7,11 +7,13 @@ import AuditExecution from './components/AuditExecution';
 import Reports from './components/Reports';
 import Login from './components/Login';
 import ManagementPlaceholder from './components/ManagementPlaceholder';
+import AuditSchedule from './components/AuditSchedule';
 import { AuditSession, ViewState, AuditStandard, AuditStatus, UserRole } from './types';
 import { LanguageProvider } from './LanguageContext';
 import { AuthProvider, useAuth } from './AuthContext';
 import { MasterDataProvider } from './MasterDataContext';
 import { SettingsProvider, useSettings } from './SettingsContext';
+import { NotificationProvider } from './NotificationContext';
 import { ArrowUp } from 'lucide-react';
 
 // Mock Data for initial visualization
@@ -248,7 +250,7 @@ const MOCK_AUDITS: AuditSession[] = [
   },
 ];
 
-const STORAGE_KEY = 'ami_smart_audits_v9'; // Bumped version to load new mocks with deadlines and SUBMITTED status
+const STORAGE_KEY = 'ami_smart_audits_v9';
 
 const AppContent: FC = () => {
   const { currentUser } = useAuth();
@@ -392,14 +394,19 @@ const AppContent: FC = () => {
             />
           )}
 
-          {/* Management Views */}
-          {['USER_MGMT', 'TEMPLATE_MGMT', 'SETTINGS', 'MASTER_DATA', 'AUDIT_SCHEDULE'].includes(currentView) && (
-            <ManagementPlaceholder 
-              view={currentView} 
+          {currentView === 'AUDIT_SCHEDULE' && (
+            <AuditSchedule 
               audits={audits}
               onCreateAudit={handleCreateAudit}
               onUpdateAudit={handleUpdateAudit}
               onDeleteAudit={handleDeleteAudit}
+            />
+          )}
+
+          {/* Management Views */}
+          {['USER_MGMT', 'TEMPLATE_MGMT', 'SETTINGS', 'MASTER_DATA'].includes(currentView) && (
+            <ManagementPlaceholder 
+              view={currentView} 
               onNavigate={setCurrentView} 
             />
           )}
@@ -434,7 +441,9 @@ const App: FC = () => {
       <AuthProvider>
         <LanguageProvider>
           <MasterDataProvider>
-            <AppContent />
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
           </MasterDataProvider>
         </LanguageProvider>
       </AuthProvider>

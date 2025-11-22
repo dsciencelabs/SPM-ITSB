@@ -1,4 +1,3 @@
-
 import { createContext, useState, useContext, ReactNode, useEffect, FC } from 'react';
 import { AuditStandard } from './types';
 
@@ -79,7 +78,7 @@ const INITIAL_UNITS: Unit[] = [
 
 const INITIAL_QUESTIONS: MasterQuestion[] = [
   // ==========================================================================================
-  // PERMENDIKTISAINTEK (Standar Nasional Pendidikan Tinggi) - COMPREHENSIVE LIST
+  // PERMENDIKTISAINTEK (Standar Nasional Pendidikan Tinggi) - COMPREHENSIVE LIST (72 QUESTIONS)
   // ==========================================================================================
   
   // --- 1. TATA KELOLA & KELEMBAGAAN (12 Butir) ---
@@ -123,48 +122,48 @@ const INITIAL_QUESTIONS: MasterQuestion[] = [
   { id: 'P.3.10', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '3. Penelitian', text: 'Apakah dokumentasi & pelaporan penelitian lengkap (proposal–laporan–luaran)?' },
 
   // --- 4. PENGABDIAN KEPADA MASYARAKAT (8 Butir) ---
-  { id: 'P.4.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah tersedia road map PkM?' },
-  { id: 'P.4.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah PkM dilakukan rutin dan relevan dengan keilmuan?' },
-  { id: 'P.4.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah PkM melibatkan mahasiswa dan pemangku kepentingan?' },
-  { id: 'P.4.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah PkM menghasilkan luaran (HKI, publikasi, modul)?' },
-  { id: 'P.4.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah PkM menyelesaikan masalah masyarakat/industri?' },
-  { id: 'P.4.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah ada pendanaan internal/eksternal untuk PkM?' },
-  { id: 'P.4.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah laporan PkM terdokumentasi lengkap?' },
-  { id: 'P.4.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. PkM', text: 'Apakah hasil PkM dimanfaatkan untuk pembelajaran?' },
+  { id: 'P.4.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah tersedia road map PkM?' },
+  { id: 'P.4.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah PkM dilakukan rutin dan relevan dengan keilmuan?' },
+  { id: 'P.4.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah PkM melibatkan mahasiswa dan pemangku kepentingan?' },
+  { id: 'P.4.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah PkM menghasilkan luaran (HKI, publikasi, modul)?' },
+  { id: 'P.4.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah PkM menyelesaikan masalah masyarakat/industri?' },
+  { id: 'P.4.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah ada pendanaan internal/eksternal untuk PkM?' },
+  { id: 'P.4.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah laporan PkM terdokumentasi lengkap?' },
+  { id: 'P.4.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '4. Pengabdian Kpd Masyarakat', text: 'Apakah hasil PkM dimanfaatkan untuk pembelajaran?' },
 
   // --- 5. SDM, KEUANGAN, SARANA PRASARANA (15 Butir) ---
-  { id: 'P.5.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah perencanaan kebutuhan SDM dilakukan berbasis beban kerja?' },
-  { id: 'P.5.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah kualifikasi dosen memenuhi ketentuan LAM/BAN-PT?' },
-  { id: 'P.5.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah pengembangan dosen (sertifikasi, pelatihan, studi lanjut) berjalan?' },
-  { id: 'P.5.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah beban kerja dosen sesuai aturan (BKD)?' },
-  { id: 'P.5.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah tenaga kependidikan cukup dan kompeten?' },
-  { id: 'P.5.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah perencanaan anggaran dilakukan secara transparan?' },
-  { id: 'P.5.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah realisasi anggaran tepat sasaran?' },
-  { id: 'P.5.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah sarana-prasarana kelas memadai dan terawat?' },
-  { id: 'P.5.9', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah laboratorium/ studio memenuhi standar keselamatan?' },
-  { id: 'P.5.10', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah perpustakaan memiliki koleksi yang mutakhir dan relevan?' },
-  { id: 'P.5.11', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah akses database ilmiah tersedia untuk seluruh civitas?' },
-  { id: 'P.5.12', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah infrastruktur IT (server, jaringan, LMS, SIA) handal?' },
-  { id: 'P.5.13', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah sistem informasi terintegrasi antar unit?' },
-  { id: 'P.5.14', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah pemeliharaan sarana dilakukan rutin?' },
-  { id: 'P.5.15', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM & Sarpras', text: 'Apakah unit memiliki rencana mitigasi bencana & keamanan data?' },
+  { id: 'P.5.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah perencanaan kebutuhan SDM dilakukan berbasis beban kerja?' },
+  { id: 'P.5.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah kualifikasi dosen memenuhi ketentuan LAM/BAN-PT?' },
+  { id: 'P.5.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah pengembangan dosen (sertifikasi, pelatihan, studi lanjut) berjalan?' },
+  { id: 'P.5.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah beban kerja dosen sesuai aturan (BKD)?' },
+  { id: 'P.5.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah tenaga kependidikan cukup dan kompeten?' },
+  { id: 'P.5.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah perencanaan anggaran dilakukan secara transparan?' },
+  { id: 'P.5.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah realisasi anggaran tepat sasaran?' },
+  { id: 'P.5.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah sarana-prasarana kelas memadai dan terawat?' },
+  { id: 'P.5.9', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah laboratorium/ studio memenuhi standar keselamatan?' },
+  { id: 'P.5.10', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah perpustakaan memiliki koleksi yang mutakhir dan relevan?' },
+  { id: 'P.5.11', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah akses database ilmiah tersedia untuk seluruh civitas?' },
+  { id: 'P.5.12', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah infrastruktur IT (server, jaringan, LMS, SIA) handal?' },
+  { id: 'P.5.13', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah sistem informasi terintegrasi antar unit?' },
+  { id: 'P.5.14', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah pemeliharaan sarana dilakukan rutin?' },
+  { id: 'P.5.15', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '5. SDM, Keu, Sarpras', text: 'Apakah unit memiliki rencana mitigasi bencana & keamanan data?' },
 
   // --- 6. MAHASISWA, LAYANAN, DAN KERJA SAMA (15 Butir) ---
-  { id: 'P.6.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah seleksi mahasiswa dilakukan sesuai SOP?' },
-  { id: 'P.6.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah layanan akademik mudah diakses dan responsif?' },
-  { id: 'P.6.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah layanan nonakademik (bimbingan karir, konseling) tersedia?' },
-  { id: 'P.6.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah ada pembinaan organisasi mahasiswa?' },
-  { id: 'P.6.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah monitoring prestasi & risiko studi dilakukan?' },
-  { id: 'P.6.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah unit memiliki program MBKM yang berjalan efektif?' },
-  { id: 'P.6.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah mahasiswa mendapat kesempatan magang/industri?' },
-  { id: 'P.6.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah ada pedoman kerjasama (MoU, MoA, IA)?' },
-  { id: 'P.6.9', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah kerjasama diimplementasikan dan menghasilkan luaran?' },
-  { id: 'P.6.10', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah tracer study terselenggara dan dianalisis?' },
-  { id: 'P.6.11', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah kepuasan mahasiswa diukur secara berkala?' },
-  { id: 'P.6.12', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah data kemahasiswaan terdokumentasi dengan baik?' },
-  { id: 'P.6.13', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah kegiatan kemahasiswaan didukung dana yang memadai?' },
-  { id: 'P.6.14', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah mahasiswa berpartisipasi dalam lomba–kompetisi?' },
-  { id: 'P.6.15', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs & Kerjasama', text: 'Apakah unit mendukung sertifikasi kompetensi (melalui LSP/mitra)?' },
+  { id: 'P.6.1', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah seleksi mahasiswa dilakukan sesuai SOP?' },
+  { id: 'P.6.2', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah layanan akademik mudah diakses dan responsif?' },
+  { id: 'P.6.3', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah layanan nonakademik (bimbingan karir, konseling) tersedia?' },
+  { id: 'P.6.4', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah ada pembinaan organisasi mahasiswa?' },
+  { id: 'P.6.5', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah monitoring prestasi & risiko studi dilakukan?' },
+  { id: 'P.6.6', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah unit memiliki program MBKM yang berjalan efektif?' },
+  { id: 'P.6.7', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah mahasiswa mendapat kesempatan magang/industri?' },
+  { id: 'P.6.8', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah ada pedoman kerjasama (MoU, MoA, IA)?' },
+  { id: 'P.6.9', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah kerjasama diimplementasikan dan menghasilkan luaran?' },
+  { id: 'P.6.10', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah tracer study terselenggara dan dianalisis?' },
+  { id: 'P.6.11', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah kepuasan mahasiswa diukur secara berkala?' },
+  { id: 'P.6.12', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah data kemahasiswaan terdokumentasi dengan baik?' },
+  { id: 'P.6.13', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah kegiatan kemahasiswaan didukung dana yang memadai?' },
+  { id: 'P.6.14', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah mahasiswa berpartisipasi dalam lomba–kompetisi?' },
+  { id: 'P.6.15', standard: AuditStandard.PERMENDIKTISAINTEK_2025, category: '6. Mhs, Layanan & Kerjasama', text: 'Apakah unit mendukung sertifikasi kompetensi (melalui LSP/mitra)?' },
 
   // ==========================================
   // LAM TEKNIK (FTSP)
@@ -191,7 +190,7 @@ const INITIAL_QUESTIONS: MasterQuestion[] = [
   { id: 'BP.9', standard: AuditStandard.BAN_PT, category: 'Kriteria 9', text: 'Produk inovasi terapan yang dihasilkan mahasiswa bersama dosen dan mitra industri.' },
 ];
 
-const STORAGE_KEY = 'ami_master_data_v7'; // Bumped version
+const STORAGE_KEY = 'ami_master_data_v10'; // Bumped version
 
 export const MasterDataProvider: FC<{ children: ReactNode }> = ({ children }) => {
   // Units State

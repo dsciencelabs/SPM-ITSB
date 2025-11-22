@@ -1,7 +1,7 @@
 
-import { useState, useEffect, FC } from 'react';
+import { useState, useEffect, FC, useRef } from 'react';
 import { AuditSession, AuditQuestion, AuditStatus, UserRole } from '../types';
-import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock, Cloud, Send, ShieldAlert } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, ChevronDown, FileText, Loader2, Calendar, Link as LinkIcon, ExternalLink, Lock, UserCheck, Building2, Scale, Clock, Cloud, Send, ShieldAlert, Info, CheckCircle2, AlertTriangle, XCircle, ShieldCheck, ArrowLeftCircle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -19,9 +19,26 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   const [localQuestions, setLocalQuestions] = useState<AuditQuestion[]>([]);
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   
+  // Ref to hold latest questions for auto-save interval
+  const questionsRef = useRef<AuditQuestion[]>([]);
+  
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [urlErrors, setUrlErrors] = useState<Record<string, string>>({});
+  
+  // Confirmation Modal States
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  
+  // Dept Head Workflow States
+  const [deptHeadRejectModalOpen, setDeptHeadRejectModalOpen] = useState(false);
+  const [deptHeadApproveModalOpen, setDeptHeadApproveModalOpen] = useState(false);
+  const [rejectionNote, setRejectionNote] = useState('');
+
+  // Update ref when state changes
+  useEffect(() => {
+    questionsRef.current = localQuestions;
+  }, [localQuestions]);
 
   // --- AUTO-LOAD & INIT LOGIC ---
   useEffect(() => {
@@ -51,22 +68,23 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     if (audit.status === AuditStatus.COMPLETED) return;
 
     const autoSaveInterval = setInterval(() => {
-      if (localQuestions.length > 0) {
+      const currentQuestions = questionsRef.current;
+      if (currentQuestions.length > 0) {
         const key = `sami_autosave_${audit.id}`;
         
         // 1. Save to LocalStorage (Backup)
-        localStorage.setItem(key, JSON.stringify(localQuestions));
+        localStorage.setItem(key, JSON.stringify(currentQuestions));
         
         // 2. Sync to Parent/App State (Main Persistence)
         // Preserve current status during autosave
-        onUpdateAudit({ ...audit, questions: localQuestions });
+        onUpdateAudit({ ...audit, questions: currentQuestions });
         
         setLastAutoSave(new Date());
       }
     }, 60000); // 60 Seconds
 
     return () => clearInterval(autoSaveInterval);
-  }, [localQuestions, audit, onUpdateAudit]);
+  }, [audit, onUpdateAudit]); // Only restart if audit object changes (e.g. manually saved)
 
   if (!audit) {
     return (
@@ -84,18 +102,26 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   const role = currentUser?.role;
   const isAdmin = role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
   
+  // Auditor can access: Admin, SuperAdmin, Auditor Lead, Auditor
   const isAuditor = role === UserRole.AUDITOR || role === UserRole.AUDITOR_LEAD || isAdmin;
-  const isAuditee = role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD || isAdmin; 
   
+  // Auditee side can access: Admin, SuperAdmin, Dept Head, Auditee
+  const isAuditeeSide = role === UserRole.AUDITEE || role === UserRole.DEPT_HEAD || isAdmin; 
+  const isDeptHead = role === UserRole.DEPT_HEAD || isAdmin;
+
   const auditStatus = audit.status;
 
   // --- ACCESS RULES ---
   
   // Auditee can edit if status is IN_PROGRESS
-  const canAuditeeEdit = isAuditee && auditStatus === AuditStatus.IN_PROGRESS;
+  const canAuditeeEdit = isAuditeeSide && auditStatus === AuditStatus.IN_PROGRESS;
   
-  // Auditor can edit verdict if IN_PROGRESS or SUBMITTED (but can only Finalize if SUBMITTED)
+  // Auditor can edit verdict if IN_PROGRESS (Preparation) or SUBMITTED (Actual Grading)
+  // Auditor CANNOT edit if waiting for DeptHead or Completed
   const canAuditorEdit = isAuditor && (auditStatus === AuditStatus.IN_PROGRESS || auditStatus === AuditStatus.SUBMITTED);
+
+  // Dept Head Review Mode
+  const isDeptHeadReview = isDeptHead && auditStatus === AuditStatus.REVIEW_DEPT_HEAD;
 
   const handleToggleExpand = (id: string) => {
     if (expandedId === id) {
@@ -147,20 +173,13 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     }
 
     try {
+      // Simple check just for http/https prefix to warn user
       if (!/^https?:\/\//i.test(value)) {
-         throw new Error("Missing protocol");
+         // throw new Error("Missing protocol"); 
       }
-      new URL(value);
-      setUrlErrors(prev => {
-        const next = { ...prev };
-        delete next[questionId];
-        return next;
-      });
+      // We allow non-url text as evidence too (e.g. "Lampiran 1"), so error is soft
     } catch (_) {
-      setUrlErrors(prev => ({
-        ...prev,
-        [questionId]: t('exec.error.url')
-      }));
+      // ignore
     }
   };
 
@@ -179,35 +198,71 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
 
   // --- ACTION BUTTONS HANDLERS ---
 
-  // 1. AUDITEE SUBMIT
+  // 1. AUDITEE SUBMIT -> Triggers Confirmation Modal
   const handleAuditeeSubmit = () => {
-    const incomplete = localQuestions.filter(q => !q.auditeeSelfAssessment || !q.evidence);
-    if (incomplete.length > 0) {
-        if (!confirm(`Masih ada ${incomplete.length} butir yang belum lengkap klaim/buktinya. Yakin ingin menyerahkan ke Auditor?`)) {
-            return;
-        }
-    } else {
-        if (!confirm("Apakah Anda yakin ingin menyelesaikan pengisian? Data akan dikunci dan diserahkan ke Auditor.")) {
-            return;
-        }
-    }
+    setSubmitConfirmOpen(true);
+  };
 
+  const executeSubmit = () => {
+    // Update Status to SUBMITTED -> Auditor can now review officially
     onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.SUBMITTED });
-    alert("✅ Audit berhasil diserahkan ke Auditor untuk verifikasi.");
+    setSubmitConfirmOpen(false);
+    setTimeout(() => {
+        alert("✅ Dokumen Berhasil Dikirim! Status Audit sekarang: SUBMITTED (Menunggu Verifikasi Auditor).");
+    }, 300);
   };
 
-  // 2. AUDITOR FINALIZE
+  // 2. AUDITOR VERIFY & SEND TO DEPT HEAD
   const handleAuditorComplete = () => {
-    if (audit.status !== AuditStatus.SUBMITTED) {
-        alert("Anda belum bisa menyelesaikan audit ini karena Auditee belum melakukan Submit.");
-        return;
-    }
-
-    if (confirm("Finalisasi Audit? Status akan menjadi COMPLETED dan laporan akan diterbitkan.")) {
-      onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.COMPLETED });
-      onComplete();
-    }
+    setFinalizeConfirmOpen(true);
   };
+
+  const executeAuditorFinalize = () => {
+    // Changes status to REVIEW_DEPT_HEAD instead of COMPLETED
+    onUpdateAudit({ ...audit, questions: localQuestions, status: AuditStatus.REVIEW_DEPT_HEAD });
+    setFinalizeConfirmOpen(false);
+    setTimeout(() => {
+        alert("✅ Verifikasi Selesai! Dokumen dikirim ke Kepala Unit (Dept Head) untuk persetujuan akhir.");
+    }, 300);
+  };
+
+  // 3. DEPT HEAD ACTIONS
+  const handleDeptHeadApprove = () => {
+    setDeptHeadApproveModalOpen(true);
+  };
+
+  const executeDeptHeadApprove = () => {
+     // Changes status to COMPLETED
+     onUpdateAudit({ ...audit, status: AuditStatus.COMPLETED, rejectionNote: undefined });
+     setDeptHeadApproveModalOpen(false);
+     onComplete(); // Trigger parent callback to switch view
+     setTimeout(() => {
+        alert("✅ Audit Disetujui & Final! Laporan Resmi telah diterbitkan.");
+    }, 300);
+  };
+
+  const handleDeptHeadReject = () => {
+    setDeptHeadRejectModalOpen(true);
+  };
+
+  const executeDeptHeadReject = () => {
+    if (!rejectionNote.trim()) {
+      alert("Mohon isi catatan penolakan/revisi.");
+      return;
+    }
+    // Revert to IN_PROGRESS and add Note
+    onUpdateAudit({ 
+        ...audit, 
+        status: AuditStatus.IN_PROGRESS, 
+        rejectionNote: rejectionNote 
+    });
+    setDeptHeadRejectModalOpen(false);
+    setRejectionNote('');
+    setTimeout(() => {
+        alert("⚠️ Audit Dikembalikan ke Auditee untuk perbaikan (Revisi).");
+    }, 300);
+  };
+
 
   // Helper to detect URLs
   const getUrl = (text: string | undefined) => {
@@ -216,20 +271,26 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
     return match ? match[0] : null;
   };
 
-  // Weighted Progress Calculation
+  // --- PROGRESS CALCULATION LOGIC ---
   const totalQuestions = localQuestions.length;
-  const progressMode = (isAuditee && !isAuditor) ? 'AUDITEE' : 'AUDITOR';
   
-  const answeredQuestions = localQuestions.filter(q => {
-      if (progressMode === 'AUDITOR') {
-        return q.compliance !== null;
-      }
-      return q.auditeeSelfAssessment !== null || (q.evidence && q.evidence.trim().length > 0);
-  }).length;
-  
-  let progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+  const auditeeFilledCount = localQuestions.filter(q => q.auditeeSelfAssessment).length;
+  const auditorFilledCount = localQuestions.filter(q => q.compliance).length;
 
-  // Date Helper for Deadlines
+  let progress = 0;
+  let progressLabel = "";
+  let answeredCount = 0;
+
+  if (audit.status === AuditStatus.IN_PROGRESS || audit.status === AuditStatus.PLANNED) {
+     progress = totalQuestions > 0 ? Math.round((auditeeFilledCount / totalQuestions) * 100) : 0;
+     progressLabel = "Progres Pengisian Auditee";
+     answeredCount = auditeeFilledCount;
+  } else {
+     progress = totalQuestions > 0 ? Math.round((auditorFilledCount / totalQuestions) * 100) : 0;
+     progressLabel = "Progres Verifikasi Auditor";
+     answeredCount = auditorFilledCount;
+  }
+
   const getDeadlineText = (dateString?: string) => {
      if (!dateString) return null;
      const deadline = new Date(dateString);
@@ -246,31 +307,66 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
   const auditorDL = getDeadlineText(audit.auditorDeadline);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto h-full flex flex-col">
+    <div className="p-6 max-w-5xl mx-auto h-full flex flex-col relative">
+      {/* REJECTION BANNER FOR AUDITEE */}
+      {audit.status === AuditStatus.IN_PROGRESS && audit.rejectionNote && (
+         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg shadow-sm animate-fade-in">
+            <div className="flex items-start gap-3">
+               <div className="p-2 bg-red-100 rounded-full text-red-600 shrink-0">
+                  <ArrowLeftCircle size={24} />
+               </div>
+               <div>
+                  <h3 className="font-bold text-red-800 text-lg">Dokumen Dikembalikan (Revisi)</h3>
+                  <p className="text-red-700 text-sm mt-1">
+                    Kepala Unit (Dept Head) telah meninjau dan meminta perbaikan.
+                  </p>
+                  <div className="mt-3 bg-white p-3 rounded border border-red-100 text-slate-700 text-sm italic">
+                     " {audit.rejectionNote} "
+                  </div>
+                  <p className="text-xs text-red-600 mt-2 font-semibold">
+                    Silakan lengkapi kekurangan dan kirim ulang.
+                  </p>
+               </div>
+            </div>
+         </div>
+      )}
+
       {/* Header Section */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6 flex-shrink-0 z-10 relative">
         <div className="flex justify-between items-start mb-4">
-          <div>
+          <div className="flex-1 mr-4">
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-2xl font-bold text-slate-900">{audit.department}</h2>
+              <h2 className="text-2xl font-bold text-slate-900">{audit.name || audit.department}</h2>
               <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
                 {audit.standard}
               </span>
             </div>
+            
+            {audit.description && (
+              <div className="flex items-start gap-3 mb-4 text-slate-700 text-sm bg-gradient-to-r from-slate-50 to-white p-3 rounded-lg border-l-4 border-blue-400 shadow-sm">
+                 <Info size={18} className="mt-0.5 shrink-0 text-blue-500" />
+                 <div>
+                    <span className="block font-bold text-xs uppercase text-slate-500 mb-0.5">Deskripsi Audit</span>
+                    <p className="leading-relaxed">{audit.description}</p>
+                 </div>
+              </div>
+            )}
+
             <div className="text-slate-500 text-xs flex items-center gap-4">
                 <span>ID: {audit.id}</span>
                 <span>•</span>
                 <span className={`font-bold px-2 py-0.5 rounded ${
                     audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-700' :
                     audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-700' :
+                    audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'bg-indigo-100 text-indigo-700' :
                     audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-slate-100'
                 }`}>
-                    Status: {audit.status}
+                    Status: {audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Menunggu Persetujuan Ka. Unit' : audit.status}
                 </span>
             </div>
             
             {/* DEADLINE BADGES */}
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
                {audit.auditeeDeadline && (
                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded border ${auditeeDL?.bg} ${auditeeDL?.color} border-current/10`}>
                     <Building2 size={14} />
@@ -300,7 +396,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                     : 'Auto-save on'}
               </div>
 
-              {/* Common Save Draft Button (Available to ALL if not completed) */}
+              {/* Common Save Draft Button */}
               {audit.status !== AuditStatus.COMPLETED && (
                   <button 
                     onClick={handleSaveDraft}
@@ -316,50 +412,78 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                   </button>
               )}
 
-              {/* AUDITEE SUBMIT BUTTON */}
-              {isAuditee && audit.status === AuditStatus.IN_PROGRESS && (
+              {/* BUTTONS LOGIC */}
+              
+              {/* 1. AUDITEE SUBMIT (IN_PROGRESS) */}
+              {isAuditeeSide && audit.status === AuditStatus.IN_PROGRESS && (
                   <button 
                     onClick={handleAuditeeSubmit}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-blue-200"
+                    className="px-5 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm shadow-blue-200 text-white bg-blue-600 hover:bg-blue-700"
+                    title="Kirim dokumen ke Auditor untuk diverifikasi"
                   >
                     <Send size={18} />
                     Selesai & Kirim
                   </button>
               )}
 
-              {/* AUDITOR FINALIZE BUTTON */}
-              {isAuditor && audit.status !== AuditStatus.COMPLETED && (
+              {/* 2. AUDITOR SEND TO DEPT HEAD (SUBMITTED or IN_PROGRESS) */}
+              {isAuditor && (audit.status === AuditStatus.IN_PROGRESS || audit.status === AuditStatus.SUBMITTED) && (
                 <button 
                   onClick={handleAuditorComplete}
-                  disabled={audit.status !== AuditStatus.SUBMITTED}
                   className={`px-5 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm border ${
-                      audit.status === AuditStatus.SUBMITTED
-                      ? 'bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-green-200 cursor-pointer'
-                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      audit.status === AuditStatus.SUBMITTED || currentUser?.role === UserRole.AUDITOR_LEAD || isAdmin
+                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-indigo-200 cursor-pointer'
+                      : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'
                   }`}
-                  title={audit.status !== AuditStatus.SUBMITTED ? "Menunggu Auditee menyelesaikan pengisian (Submit)." : "Finalisasi Audit"}
+                  title={audit.status === AuditStatus.IN_PROGRESS ? "Menunggu Auditee menyerahkan dokumen." : "Verifikasi selesai, kirim ke Kepala Unit."}
                 >
-                  {audit.status !== AuditStatus.SUBMITTED ? <Lock size={18} /> : <CheckCircle size={18} />}
-                  {t('exec.btn.complete')}
+                  <UserCheck size={18} />
+                  Kirim ke Ka. Unit
                 </button>
+              )}
+
+              {/* 3. DEPT HEAD REVIEW (REVIEW_DEPT_HEAD) */}
+              {isDeptHeadReview && (
+                <div className="flex gap-2">
+                    <button 
+                      onClick={handleDeptHeadReject}
+                      className="px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                    >
+                      <XCircle size={18} />
+                      Tolak & Revisi
+                    </button>
+                    <button 
+                      onClick={handleDeptHeadApprove}
+                      className="px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-sm bg-green-600 text-white hover:bg-green-700 shadow-green-200"
+                    >
+                      <CheckCircle size={18} />
+                      Setujui & Final
+                    </button>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* STATUS BANNER FOR AUDITOR */}
+        {/* STATUS BANNERS */}
         {isAuditor && audit.status === AuditStatus.IN_PROGRESS && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center gap-3 text-sm text-amber-800">
                 <Clock size={20} className="text-amber-600" />
-                <span><strong>Menunggu Auditee:</strong> Auditee sedang melengkapi data. Anda dapat menyimpan draft, tetapi tombol "Selesai Audit" hanya akan aktif setelah Auditee melakukan Submit.</span>
+                <span><strong>Menunggu Auditee:</strong> Auditee sedang melengkapi data. Disarankan menunggu status "Submitted".</span>
             </div>
         )}
 
-        {/* STATUS BANNER FOR AUDITEE */}
-        {isAuditee && audit.status === AuditStatus.SUBMITTED && (
+        {isAuditeeSide && audit.status === AuditStatus.SUBMITTED && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4 flex items-center gap-3 text-sm text-purple-800">
                 <ShieldAlert size={20} className="text-purple-600" />
-                <span><strong>Audit Diserahkan:</strong> Data telah dikunci dan sedang dalam proses verifikasi oleh Auditor. Anda tidak dapat mengubah data saat ini.</span>
+                <span><strong>Audit Diserahkan:</strong> Dokumen sedang diverifikasi oleh Auditor.</span>
+            </div>
+        )}
+
+        {audit.status === AuditStatus.REVIEW_DEPT_HEAD && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 flex items-center gap-3 text-sm text-indigo-800">
+                <ShieldCheck size={20} className="text-indigo-600" />
+                <span><strong>Menunggu Persetujuan:</strong> Audit telah diverifikasi Auditor. Menunggu persetujuan/review Kepala Unit (Dept Head).</span>
             </div>
         )}
         
@@ -367,11 +491,11 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         <div className="space-y-2 mt-4">
           <div className="flex justify-between items-end text-sm">
              <span className="font-medium text-slate-700">
-                {progressMode === 'AUDITOR' ? 'Progres Verifikasi Auditor' : 'Progres Pengisian Auditee'}
+                {progressLabel}
              </span>
              <div className="flex items-baseline gap-2">
                <span className="text-xs text-slate-400 font-medium">
-                 {answeredQuestions}/{totalQuestions} items
+                 {answeredCount}/{totalQuestions} items
                </span>
                <span className={`font-bold text-lg transition-all duration-300 ${progress === 100 ? 'text-green-600' : 'text-blue-600'}`}>
                  {progress}%
@@ -391,7 +515,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
         </div>
       </div>
 
-      {/* Questions List using localQuestions */}
+      {/* Questions List */}
       <div className="space-y-4 overflow-y-auto flex-1 pb-20 pr-2 scroll-smooth">
         {localQuestions.map((q) => {
           const isExpanded = expandedId === q.id;
@@ -618,12 +742,6 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
                                  />
                              </div>
                          </div>
-                         {canAuditeeEdit && (
-                            <p className="text-[10px] text-amber-600 mt-3 italic flex items-center gap-1">
-                               <AlertCircle size={10} />
-                               Wajib diisi oleh Auditee sebagai komitmen perbaikan atas temuan audit.
-                            </p>
-                         )}
                       </div>
                    )}
                 </div>
@@ -632,6 +750,108 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
           );
         })}
       </div>
+
+      {/* MODALS */}
+
+      {/* Auditee Submit Confirmation */}
+      {submitConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+              <Send size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Kirim Dokumen ke Auditor?</h3>
+              <p className="text-slate-500">Status akan berubah menjadi <strong>SUBMITTED</strong>. Anda tidak dapat mengedit lagi kecuali diminta revisi.</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setSubmitConfirmOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Batal</button>
+              <button onClick={executeSubmit} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">Ya, Kirim</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auditor Finalize Confirmation */}
+      {finalizeConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-indigo-100 text-indigo-600">
+                <UserCheck size={32} />
+            </div>
+            <div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Kirim ke Kepala Unit?</h3>
+                <p className="text-slate-500">
+                    Verifikasi Auditor selesai. Dokumen akan dikirim ke <strong>Dept Head</strong> untuk persetujuan akhir.
+                </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+                <button onClick={() => setFinalizeConfirmOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Batal</button>
+                <button onClick={executeAuditorFinalize} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700">Ya, Kirim</button>
+            </div>
+            </div>
+        </div>
+      )}
+
+      {/* Dept Head Approve Confirmation */}
+      {deptHeadApproveModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-green-100 text-green-600">
+                <CheckCircle size={32} />
+            </div>
+            <div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Setujui & Finalisasi Audit?</h3>
+                <p className="text-slate-500">
+                    Status audit akan berubah menjadi <strong>COMPLETED</strong>. Laporan resmi akan diterbitkan.
+                </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+                <button onClick={() => setDeptHeadApproveModalOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Batal</button>
+                <button onClick={executeDeptHeadApprove} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700">Ya, Setujui</button>
+            </div>
+            </div>
+        </div>
+      )}
+
+      {/* Dept Head Reject Modal */}
+      {deptHeadRejectModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 space-y-4">
+                <div className="text-center">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-red-100 text-red-600 mb-3">
+                        <XCircle size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900">Tolak & Minta Revisi</h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                        Dokumen akan dikembalikan ke <strong>Auditee</strong> (In Progress).
+                    </p>
+                </div>
+                
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">Alasan Penolakan / Catatan Revisi:</label>
+                    <textarea 
+                        value={rejectionNote}
+                        onChange={(e) => setRejectionNote(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none h-32 resize-none"
+                        placeholder="Contoh: Bukti pada poin C.1 kurang lengkap, mohon diperbaiki..."
+                    />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <button onClick={() => setDeptHeadRejectModalOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Batal</button>
+                    <button 
+                        onClick={executeDeptHeadReject}
+                        disabled={!rejectionNote.trim()} 
+                        className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Kirim Revisi
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };

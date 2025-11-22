@@ -1,7 +1,7 @@
 
 import { FC, ElementType } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
-import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send, CalendarClock } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send, CalendarClock, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -57,6 +57,7 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
   const inProgress = filteredAudits.filter(a => a.status === AuditStatus.IN_PROGRESS).length;
   const submitted = filteredAudits.filter(a => a.status === AuditStatus.SUBMITTED).length;
   const planned = filteredAudits.filter(a => a.status === AuditStatus.PLANNED).length;
+  const reviewDept = filteredAudits.filter(a => a.status === AuditStatus.REVIEW_DEPT_HEAD).length;
   const total = filteredAudits.length;
 
   const canCreateAudit = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
@@ -121,9 +122,9 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
         {/* Stats Grid - Updated to 5 columns to accommodate Planned */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatCard title={t('dash.total')} value={total} icon={BarChart3} color="bg-blue-500" />
-          <StatCard title="Plan Penugasan" value={planned} icon={CalendarClock} color="bg-indigo-500" />
           <StatCard title={t('dash.inProgress')} value={inProgress} icon={Clock} color="bg-amber-500" />
-          <StatCard title="Menunggu Verifikasi" value={submitted} icon={Send} color="bg-purple-500" />
+          <StatCard title="Verifikasi Auditor" value={submitted} icon={Send} color="bg-purple-500" />
+          <StatCard title="Review DeptHead" value={reviewDept} icon={ShieldCheck} color="bg-indigo-500" />
           <StatCard title={t('dash.completed')} value={completed} icon={CheckCircle2} color="bg-green-500" />
         </div>
 
@@ -165,12 +166,15 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' : 
+                          audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'bg-indigo-100 text-indigo-800' :
                           audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-800' :
                           audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-800' : 
-                          audit.status === AuditStatus.PLANNED ? 'bg-indigo-100 text-indigo-800' :
+                          audit.status === AuditStatus.PLANNED ? 'bg-slate-100 text-slate-800' :
                           'bg-slate-100 text-slate-600'
                         }`}>
-                          {audit.status === AuditStatus.SUBMITTED ? 'Diserahkan (Verifikasi)' : audit.status}
+                          {audit.status === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : 
+                           audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' :
+                           audit.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-500">{new Date(audit.date).toLocaleDateString('id-ID')}</td>

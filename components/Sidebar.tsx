@@ -1,5 +1,5 @@
 
-import { useState, FC } from 'react';
+import { useState, FC, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   FilePlus, 
@@ -13,12 +13,17 @@ import {
   CalendarClock,
   Pin,
   PinOff,
-  LogOut
+  LogOut,
+  Bell,
+  Check,
+  Trash2,
+  X
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 import { useSettings } from '../SettingsContext';
+import { useNotification } from '../NotificationContext';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -31,12 +36,36 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
   const { t, language, setLanguage } = useLanguage();
   const { currentUser, logout } = useAuth();
   const { settings } = useSettings();
+  const { notifications, markAsRead, markAllAsRead, clearAll } = useNotification();
   
   // Local state for hover interactions
   const [isHovered, setIsHovered] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  // Filter notifications for current user
+  const myNotifications = notifications.filter(n => n.userId === currentUser?.id);
+  const unreadCount = myNotifications.filter(n => !n.isRead).length;
+
+  // Handle click outside to close notifications
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleNotificationClick = (noteId: string) => {
+    markAsRead(noteId);
+    // Smart navigation: Redirect to Audit Execution as it's the main action area
+    setCurrentView('AUDIT_EXECUTION');
+    setShowNotifications(false);
+  };
 
   // Determine if the sidebar is visually expanded
-  // It is expanded if it's PINNED (!isCollapsed) OR if the mouse is HOVERING (isHovered)
   const isExpanded = !isCollapsed || isHovered;
 
   // Define menus based on Role
@@ -65,7 +94,6 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         return [
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock },
-          // REMOVED: User Management & Master Data (Super Admin only)
           { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: t('nav.execution'), icon: ClipboardList },
@@ -77,7 +105,6 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
           ...base,
           { id: 'AUDIT_SCHEDULE', label: 'Jadwal & Penugasan', icon: CalendarClock },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, // Enabled
           { id: 'AUDIT_EXECUTION', label: 'All Active Audits', icon: ClipboardList },
           { id: 'REPORT', label: 'All Reports', icon: PieChart },
         ];
@@ -139,11 +166,84 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         )}
         
         {isExpanded && (
-          <div className="overflow-hidden animate-fade-in">
-            <h1 className="font-bold text-lg tracking-tight truncate" title={settings.appName}>
-              {settings.appName}
-            </h1>
-            <p className="text-xs text-slate-400 truncate">{currentUser?.role || 'Guest'}</p>
+          <div className="overflow-hidden animate-fade-in relative w-full">
+            <div className="flex justify-between items-start">
+                <div className="flex-1 overflow-hidden">
+                    <h1 className="font-bold text-lg tracking-tight truncate" title={settings.appName}>
+                    {settings.appName}
+                    </h1>
+                    <p className="text-xs text-slate-400 truncate">{currentUser?.role || 'Guest'}</p>
+                </div>
+                
+                {/* Notification Bell */}
+                <div ref={notificationRef} className="relative">
+                    <button 
+                        onClick={() => setShowNotifications(!showNotifications)}
+                        className="relative p-1 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <Bell size={18} />
+                        {unreadCount > 0 && (
+                            <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border border-slate-900"></span>
+                        )}
+                    </button>
+
+                    {/* Notification Popover */}
+                    {showNotifications && (
+                        <div className="absolute left-full top-0 ml-4 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 text-slate-800 z-[60] overflow-hidden animate-fade-in">
+                            <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                <h3 className="font-bold text-sm">Notifications</h3>
+                                <div className="flex gap-1">
+                                    {unreadCount > 0 && (
+                                        <button 
+                                            onClick={() => currentUser && markAllAsRead(currentUser.id)}
+                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded" 
+                                            title="Mark all read"
+                                        >
+                                            <Check size={14} />
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={() => currentUser && clearAll(currentUser.id)}
+                                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                        title="Clear all"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                    <button onClick={() => setShowNotifications(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="max-h-80 overflow-y-auto">
+                                {myNotifications.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-400 text-xs">
+                                        <Bell size={24} className="mx-auto mb-2 opacity-20" />
+                                        No notifications
+                                    </div>
+                                ) : (
+                                    myNotifications.map(note => (
+                                        <div 
+                                            key={note.id} 
+                                            onClick={() => handleNotificationClick(note.id)}
+                                            className={`p-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors relative ${!note.isRead ? 'bg-blue-50/30' : ''}`}
+                                            title="Click to view details"
+                                        >
+                                            {!note.isRead && <div className="absolute left-2 top-4 w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                                            <div className="pl-3">
+                                                <p className={`text-xs font-bold mb-0.5 ${!note.isRead ? 'text-slate-800' : 'text-slate-600'}`}>{note.title}</p>
+                                                <p className="text-xs text-slate-500 line-clamp-2">{note.message}</p>
+                                                <p className="text-[10px] text-slate-400 mt-1 text-right">
+                                                    {new Date(note.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
           </div>
         )}
       </div>

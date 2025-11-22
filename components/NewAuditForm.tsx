@@ -2,11 +2,12 @@
 import { useState, useEffect, FC, FormEvent } from 'react';
 import { AuditStandard, AuditSession, AuditStatus, AuditQuestion, UserRole } from '../types';
 import { generateChecklist } from '../services/geminiService';
-import { Sparkles, Loader2, ArrowRight, Plus, Trash2, Edit3, Save, ArrowLeft, GripVertical, AlertTriangle, Database, Bot, Filter, User, Lock, UserX, Send, CheckCircle2, FileText, CalendarClock } from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, Plus, Trash2, Edit3, Save, ArrowLeft, GripVertical, AlertTriangle, Database, Bot, Filter, User, Lock, UserX, Send, CheckCircle2, FileText, CalendarClock, Type, FileType } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 import { useMasterData } from '../MasterDataContext';
 import { useSettings } from '../SettingsContext';
+import { useNotification } from '../NotificationContext';
 
 interface NewAuditFormProps {
   onAuditCreated: (audit: AuditSession) => void;
@@ -18,12 +19,15 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
   const { currentUser, users } = useAuth();
   const { units, questions: masterQuestions } = useMasterData(); 
   const { settings } = useSettings();
+  const { addNotification } = useNotification();
   
   // Form State
   const [step, setStep] = useState<1 | 2>(1);
   const [department, setDepartment] = useState('');
   const [standard, setStandard] = useState<AuditStandard>(settings.defaultStandard || AuditStandard.PERMENDIKTISAINTEK_2025);
   const [assignedAuditorId, setAssignedAuditorId] = useState(''); 
+  const [auditName, setAuditName] = useState('');
+  const [auditDescription, setAuditDescription] = useState('');
   
   // Drafting State
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +111,11 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
   useEffect(() => {
     if (!department) return;
 
+    // Auto-fill name if empty
+    if (!auditName) {
+        setAuditName(`Audit Mutu ${department} - ${settings.auditPeriod}`);
+    }
+
     const selectedUnit = units.find(u => u.name === department);
     if (selectedUnit) {
       const f = (selectedUnit.faculty || '').toUpperCase();
@@ -119,7 +128,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
         setStandard(AuditStandard.BAN_PT);
       } 
     }
-  }, [department, units]);
+  }, [department, units, settings.auditPeriod]);
 
   const handleStandardClick = (newStd: AuditStandard) => {
     setStandard(newStd);
@@ -129,8 +138,8 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
 
   const handleGenerateDraft = async (e: FormEvent) => {
     e.preventDefault();
-    if (!department || !assignedAuditorId) {
-      alert("Mohon lengkapi Unit dan Auditor Penanggung Jawab.");
+    if (!department || !assignedAuditorId || !auditName) {
+      alert("Mohon lengkapi Nama Audit, Unit, dan Auditor Penanggung Jawab.");
       return;
     }
 
@@ -228,7 +237,8 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
 
     const newAudit: AuditSession = {
       id: Date.now().toString(),
-      name: `Audit ${department} - ${settings.auditPeriod}`,
+      name: auditName,
+      description: auditDescription, // Pass description to new audit object
       department,
       standard,
       status: AuditStatus.IN_PROGRESS,
@@ -242,10 +252,29 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
     const auditorName = users.find(u => u.id === assignedAuditorId)?.name || 'Auditor';
 
     onAuditCreated(newAudit);
+
+    // --- NOTIFICATIONS ---
+    if (assignedAuditorId) {
+      addNotification(
+        assignedAuditorId,
+        "New Audit Assigned",
+        `You have been assigned to audit ${department}. Deadline: ${auditorDeadline.toLocaleDateString()}`
+      );
+    }
+
+    const auditees = users.filter(u => u.department === department);
+    auditees.forEach(u => {
+       addNotification(
+         u.id,
+         "Audit Started",
+         `A new audit for ${department} has started. Deadline for self-assessment: ${auditeeDeadline.toLocaleDateString()}`
+       );
+    });
+
     setIsSubmitting(false);
 
     // Detailed Success Message
-    alert(`✅ Penugasan Berhasil Dikirim!\n\n• Auditee Deadline: ${auditeeDeadline.toLocaleDateString()} (2 Minggu)\n• Auditor Deadline: ${auditorDeadline.toLocaleDateString()} (3 Minggu)\n\nNotifikasi telah dikirim ke ${auditorName} dan Unit ${department}`);
+    alert(`✅ Penugasan Berhasil Dikirim!\n\n• Auditee Deadline: ${auditeeDeadline.toLocaleDateString()} (2 Minggu)\n• Auditor Deadline: ${auditorDeadline.toLocaleDateString()} (3 Minggu)\n\nNotifikasi (In-App & Email) telah dikirim ke ${auditorName} dan Unit ${department}`);
   };
 
   const getSelectedAuditorName = () => {
@@ -395,6 +424,43 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                     )}
                   </div>
               </div>
+              
+              {/* 4. AUDIT NAME & DESCRIPTION - Enhanced */}
+              <div className="space-y-6 border-t border-slate-100 pt-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                       4. Nama Penugasan Audit (Wajib)
+                    </label>
+                    <div className="relative">
+                        <input 
+                          required
+                          type="text"
+                          value={auditName}
+                          onChange={(e) => setAuditName(e.target.value)}
+                          placeholder={`Contoh: Audit Mutu ${department || '...'} - ${settings.auditPeriod}`}
+                          className="w-full px-4 py-3 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 transition-all outline-none font-medium"
+                        />
+                        <Type size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                       5. Deskripsi / Catatan Penugasan (Opsional)
+                    </label>
+                    <div className="relative">
+                        <textarea 
+                          rows={3}
+                          value={auditDescription}
+                          onChange={(e) => setAuditDescription(e.target.value)}
+                          placeholder="Tambahkan deskripsi audit, ruang lingkup, atau instruksi khusus untuk Auditor/Auditee..."
+                          className="w-full px-4 py-3 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 transition-all outline-none resize-none"
+                        />
+                        <FileType size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 ml-1">Informasi ini akan ditampilkan di header pelaksanaan audit untuk memberikan konteks.</p>
+                  </div>
+              </div>
 
               <div className="pt-6 flex items-center justify-end gap-4 border-t border-slate-100 mt-6">
                 <button
@@ -406,7 +472,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || !department || !assignedAuditorId}
+                  disabled={isLoading || !department || !assignedAuditorId || !auditName}
                   className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
@@ -625,6 +691,13 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                 </div>
 
                 <div className="space-y-3">
+                   {/* Audit Name & Desc Preview */}
+                   <div className="flex flex-col gap-1 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-xs font-bold text-slate-400 uppercase">Nama Audit</p>
+                      <p className="text-sm font-bold text-slate-800">{auditName}</p>
+                      {auditDescription && <p className="text-xs text-slate-500 mt-1 italic">"{auditDescription}"</p>}
+                   </div>
+
                    {/* Auditor */}
                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
                       <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 shrink-0">

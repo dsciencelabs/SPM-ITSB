@@ -10,6 +10,7 @@ export enum AuditStatus {
   PLANNED = 'Planned',
   IN_PROGRESS = 'In Progress',
   SUBMITTED = 'Submitted', // Auditee submitted, waiting for Auditor verification
+  REVIEW_DEPT_HEAD = 'Review DeptHead', // Auditor verified, waiting for DeptHead approval
   COMPLETED = 'Completed'
 }
 
@@ -56,6 +57,7 @@ export interface AuditQuestion {
 export interface AuditSession {
   id: string;
   name: string;
+  description?: string; // Added description field
   department: string;
   standard: AuditStandard;
   status: AuditStatus;
@@ -69,6 +71,8 @@ export interface AuditSession {
   questions: AuditQuestion[];
   aiSummary?: string;
   aiRecommendations?: string[];
+  
+  rejectionNote?: string; // Notes from DeptHead when rejecting
 }
 
 export type ViewState = 
@@ -77,7 +81,7 @@ export type ViewState =
   | 'AUDIT_EXECUTION' 
   | 'REPORT' 
   // SuperAdmin & Admin Views
-  | 'USER_MGMT'
+  | 'USER_MGMT' 
   | 'TEMPLATE_MGMT'
   | 'SETTINGS'
   | 'MASTER_DATA'

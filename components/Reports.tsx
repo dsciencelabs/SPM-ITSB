@@ -1,7 +1,8 @@
-import { useState, FC, useMemo } from 'react';
+
+import { useState, FC, useMemo, MouseEvent } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity, HelpCircle } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
@@ -129,10 +130,16 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   // New Status Filter for Repository View
   const [repoStatusFilter, setRepoStatusFilter] = useState<'ALL' | AuditStatus>('ALL');
 
+  // Modal State for Reopen Confirmation
+  const [reopenDialog, setReopenDialog] = useState<{isOpen: boolean; audit: AuditSession | null}>({
+    isOpen: false,
+    audit: null
+  });
+
   // GLOBAL PERMISSION CHECK
   const isAdmin = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
   
-  // Reopen Permission specifically
+  // Reopen Permission specifically (Only Admin/SuperAdmin)
   const canReopen = isAdmin;
 
   // CALCULATE RADAR DATA MEMO
@@ -160,11 +167,17 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
     }));
   }, [audit]);
 
-  // Helper to Re-open from List View
-  const handleReopenFromList = (targetAudit: AuditSession, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent row click
-    if (confirm(t('report.reopenConfirm'))) {
-        onUpdateAudit({ ...targetAudit, status: AuditStatus.IN_PROGRESS });
+  // Handler to Trigger Reopen Modal
+  const triggerReopen = (targetAudit: AuditSession, e?: MouseEvent) => {
+    if (e) e.stopPropagation(); // Prevent row click
+    setReopenDialog({ isOpen: true, audit: targetAudit });
+  };
+
+  // Execute Reopen Logic
+  const executeReopen = () => {
+    if (reopenDialog.audit) {
+        onUpdateAudit({ ...reopenDialog.audit, status: AuditStatus.IN_PROGRESS });
+        setReopenDialog({ isOpen: false, audit: null });
     }
   };
 
@@ -219,7 +232,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
       currentUser?.role === UserRole.AUDITOR;
 
     return (
-      <div className="animate-fade-in">
+      <div className="animate-fade-in relative">
         {/* Sticky Header */}
         <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50">
           <div className="max-w-7xl mx-auto px-8 py-6 flex flex-col md:flex-row justify-between items-end gap-4">
@@ -329,6 +342,10 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                              <span className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100 w-fit">
                                <Send size={12} /> Submitted
                              </span>
+                           ) : a.status === AuditStatus.REVIEW_DEPT_HEAD ? (
+                             <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 w-fit">
+                               <ShieldCheck size={12} /> Review Ka. Unit
+                             </span>
                            ) : (
                              <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
                                <Clock size={12} /> {t('repo.progress')}
@@ -337,9 +354,9 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-3">
-                            {canReopen && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.SUBMITTED) && (
+                            {canReopen && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.SUBMITTED || a.status === AuditStatus.REVIEW_DEPT_HEAD) && (
                               <button
-                                onClick={(e) => handleReopenFromList(a, e)}
+                                onClick={(e) => triggerReopen(a, e)}
                                 className="text-amber-600 hover:text-amber-800 text-sm font-medium bg-amber-50 hover:bg-amber-100 p-1.5 rounded transition-colors border border-amber-200"
                                 title={t('report.btn.reopen') + " (Admin Only)"}
                               >
@@ -363,17 +380,45 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
             </table>
           </div>
         </div>
+
+        {/* REOPEN CONFIRMATION MODAL */}
+        {reopenDialog.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+                <HelpCircle size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
+                <p className="text-sm text-slate-500">
+                  {t('report.reopenConfirm')}
+                </p>
+                <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
+                  <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setReopenDialog({ isOpen: false, audit: null })}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={executeReopen}
+                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
+                >
+                  Ya, Buka Kembali
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // --- DETAIL VIEW ---
-  
-  const handleReopenAudit = () => {
-    if (confirm(t('report.reopenConfirm'))) {
-        onUpdateAudit({ ...audit, status: AuditStatus.IN_PROGRESS });
-    }
-  };
 
   const handleGenerateAnalysis = async () => {
     setIsGenerating(true);
@@ -517,7 +562,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto animate-fade-in">
+    <div className="p-8 max-w-6xl mx-auto animate-fade-in relative">
       {/* Back Button */}
       <div className="mb-4">
         <button 
@@ -553,15 +598,17 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                   ? 'bg-green-50 text-green-700 border-green-100' 
                   : audit.status === AuditStatus.SUBMITTED
                   ? 'bg-purple-50 text-purple-700 border-purple-100'
+                  : audit.status === AuditStatus.REVIEW_DEPT_HEAD
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
                   : 'bg-amber-50 text-amber-700 border-amber-100'
              }`}>
                 {audit.status === AuditStatus.COMPLETED ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                {audit.status}
+                {audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review Ka. Unit' : audit.status}
              </span>
              
-             {canReopen && (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.SUBMITTED) && (
+             {canReopen && (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.SUBMITTED || audit.status === AuditStatus.REVIEW_DEPT_HEAD) && (
                 <button 
-                  onClick={handleReopenAudit}
+                  onClick={() => triggerReopen(audit)}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm border border-amber-200"
                   title={t('report.btn.reopen') + " (Admin Only)"}
                 >
@@ -794,6 +841,40 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
           </table>
         </div>
       </div>
+      
+      {/* REOPEN CONFIRMATION MODAL */}
+      {reopenDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+              <HelpCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
+              <p className="text-sm text-slate-500">
+                {t('report.reopenConfirm')}
+              </p>
+              <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
+                 <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setReopenDialog({ isOpen: false, audit: null })}
+                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={executeReopen}
+                className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
+              >
+                Ya, Buka Kembali
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

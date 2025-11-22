@@ -1,11 +1,11 @@
 
 import { useState, FC, FormEvent, ChangeEvent } from 'react';
-import { ViewState, UserRole, AuditStandard, User, AuditSession, AuditStatus } from '../types';
+import { ViewState, UserRole, AuditStandard, User } from '../types';
 import { 
   Users, Settings, Database, CheckCircle2, XCircle, X, Plus, Edit, Trash2, Search, Shield, 
-  UserCog, Briefcase, Save, Calendar, FileBox, ChevronRight, Clock, MapPin, CalendarDays, Eye,
-  Power, UserCheck, AlertTriangle, Info, Crown, Contact, Loader2, HelpCircle,
-  ChevronLeft, LayoutList, AlertCircle, Filter, Lock, PlayCircle
+  UserCog, Briefcase, Save, FileBox, Clock,
+  Power, UserCheck, Info, Crown, Contact, Loader2, HelpCircle,
+  Filter, Lock, ListChecks, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useMasterData, Unit, MasterQuestion } from '../MasterDataContext';
@@ -14,14 +14,10 @@ import { useSettings } from '../SettingsContext';
 
 interface Props {
   view: ViewState;
-  audits?: AuditSession[];
-  onCreateAudit?: (audit: AuditSession) => void;
-  onUpdateAudit?: (audit: AuditSession) => void;
-  onDeleteAudit?: (id: string) => void;
-  onNavigate?: (view: ViewState) => void; // Added for redirection
+  onNavigate?: (view: ViewState) => void;
 }
 
-const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, onUpdateAudit, onDeleteAudit, onNavigate }) => {
+const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
   const { t } = useLanguage();
   
   // --- CONTEXTS ---
@@ -31,7 +27,7 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
   } = useMasterData();
   
   const { 
-    users, addUser, updateUser, deleteUser 
+    users, addUser, updateUser, deleteUser, currentUser
   } = useAuth();
 
   const { settings, updateSettings } = useSettings();
@@ -83,6 +79,7 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
 
   // Template Management
   const [activeStandard, setActiveStandard] = useState<AuditStandard>(AuditStandard.PERMENDIKTISAINTEK_2025);
+  const [qSearchTerm, setQSearchTerm] = useState('');
   const [isQModalOpen, setIsQModalOpen] = useState(false);
   const [qForm, setQForm] = useState<Partial<MasterQuestion>>({});
   const [isEditingQ, setIsEditingQ] = useState(false);
@@ -91,167 +88,9 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
     questionId: null, 
     questionText: '' 
   });
-
-  // Audit Schedule
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [scheduleViewMode, setScheduleViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
-  const [calendarDate, setCalendarDate] = useState(new Date());
-  const [scheduleForm, setScheduleForm] = useState({
-    department: '',
-    standard: settings.defaultStandard || AuditStandard.PERMENDIKTISAINTEK_2025,
-    auditorId: '',
-    date: new Date().toISOString().split('T')[0]
-  });
-
-  // Reschedule & Delete Schedule State
-  const [rescheduleState, setRescheduleState] = useState<{
-    isOpen: boolean;
-    audit: AuditSession | null;
-    newDate: string;
-  }>({ isOpen: false, audit: null, newDate: '' });
-
-  const [deleteScheduleModal, setDeleteScheduleModal] = useState<{ open: boolean; auditId: string | null; auditName: string }>({
-    open: false,
-    auditId: null,
-    auditName: ''
-  });
-
-  // --- HANDLERS: AUDIT SCHEDULE ---
-  const handleSaveSchedule = (e: FormEvent) => {
-    e.preventDefault();
-    
-    // Manual Validation to ensure user knows what is missing
-    if (!scheduleForm.department) {
-      alert("Mohon pilih Unit/Departemen (Auditee) terlebih dahulu.");
-      return;
-    }
-    if (!scheduleForm.auditorId) {
-      alert("Mohon pilih Auditor yang bertugas.");
-      return;
-    }
-    if (!scheduleForm.date) {
-      alert("Mohon tentukan tanggal audit.");
-      return;
-    }
-
-    // Confirm Save
-    if (!window.confirm(t('confirm.add'))) return;
-
-    if (onCreateAudit) {
-      // Find master questions for this standard to populate initial checklist
-      const relevantQuestions = questions.filter(q => q.standard === scheduleForm.standard);
-      
-      const startDate = new Date(scheduleForm.date);
-      // Auditee: 14 Days (2 Weeks)
-      const auditeeDeadline = new Date(startDate);
-      auditeeDeadline.setDate(startDate.getDate() + 14);
-
-      // Auditor: 21 Days (3 Weeks)
-      const auditorDeadline = new Date(startDate);
-      auditorDeadline.setDate(startDate.getDate() + 21);
-
-      const newAudit: AuditSession = {
-        id: Date.now().toString(),
-        name: `Audit ${scheduleForm.department} - ${settings.auditPeriod}`,
-        department: scheduleForm.department,
-        standard: scheduleForm.standard,
-        status: AuditStatus.PLANNED,
-        date: startDate.toISOString(),
-        auditeeDeadline: auditeeDeadline.toISOString(),
-        auditorDeadline: auditorDeadline.toISOString(),
-        assignedAuditorId: scheduleForm.auditorId,
-        questions: relevantQuestions.map(q => ({
-          id: q.id,
-          category: q.category,
-          questionText: q.text,
-          compliance: null,
-          auditeeSelfAssessment: null,
-          evidence: "",
-          auditorNotes: ""
-        }))
-      };
-      
-      onCreateAudit(newAudit);
-      setIsScheduleModalOpen(false);
-      alert("✅ Jadwal Audit Berhasil Dikonfirmasi dan Disimpan!");
-      
-      // Reset form
-      setScheduleForm({
-        department: '',
-        standard: settings.defaultStandard || AuditStandard.PERMENDIKTISAINTEK_2025,
-        auditorId: '',
-        date: new Date().toISOString().split('T')[0]
-      });
-    }
-  };
-
-  const handleStartAudit = (audit: AuditSession) => {
-    if (!onUpdateAudit) return;
-    if (window.confirm("Konfirmasi: Apakah Anda ingin mengaktifkan audit ini sekarang? Status akan berubah menjadi 'In Progress'.")) {
-      onUpdateAudit({
-        ...audit,
-        status: AuditStatus.IN_PROGRESS
-      });
-    }
-  };
-
-  const handleRescheduleSave = (e: FormEvent) => {
-    e.preventDefault();
-    
-    if (!rescheduleState.newDate) {
-       alert("Mohon pilih tanggal baru.");
-       return;
-    }
-
-    if (!rescheduleState.audit || !onUpdateAudit) return;
-
-    if (window.confirm(t('confirm.update'))) {
-      const newDate = new Date(rescheduleState.newDate);
-      
-      // Re-calculate deadlines based on new date
-      const auditeeDeadline = new Date(newDate);
-      auditeeDeadline.setDate(newDate.getDate() + 14);
-
-      const auditorDeadline = new Date(newDate);
-      auditorDeadline.setDate(newDate.getDate() + 21);
-
-      const updatedAudit = {
-        ...rescheduleState.audit,
-        date: newDate.toISOString(),
-        auditeeDeadline: auditeeDeadline.toISOString(),
-        auditorDeadline: auditorDeadline.toISOString()
-      };
-      onUpdateAudit(updatedAudit);
-      // Notification simulation (simulating email/system notification)
-      alert(`Jadwal Audit untuk ${updatedAudit.department} berhasil diperbarui ke tanggal ${rescheduleState.newDate}.\n\nNotifikasi perubahan jadwal telah dikirim ke Auditor dan Auditee.`);
-      
-      setRescheduleState({ isOpen: false, audit: null, newDate: '' });
-    }
-  };
-
-  const confirmDeleteSchedule = () => {
-    if (deleteScheduleModal.auditId && onDeleteAudit) {
-      onDeleteAudit(deleteScheduleModal.auditId);
-      setDeleteScheduleModal({ open: false, auditId: null, auditName: '' });
-    }
-  };
-
-  // --- HANDLERS: CALENDAR ---
-  const changeMonth = (offset: number) => {
-    setCalendarDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(newDate.getMonth() + offset);
-      return newDate;
-    });
-  };
-
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Sunday
-    return { daysInMonth, firstDayOfMonth, month, year };
-  };
+  
+  // State to track open/closed categories in the matrix view
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   // --- HANDLERS: SETTINGS ---
   const confirmSaveSettings = () => {
@@ -382,20 +221,63 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
   };
 
   // --- HANDLERS: TEMPLATE ---
-  const filteredQuestions = questions.filter(q => q.standard === activeStandard);
+  const filteredQuestions = questions.filter(q => {
+      const matchesStandard = q.standard === activeStandard;
+      const matchesSearch = qSearchTerm 
+        ? q.text.toLowerCase().includes(qSearchTerm.toLowerCase()) || q.category.toLowerCase().includes(qSearchTerm.toLowerCase())
+        : true;
+      return matchesStandard && matchesSearch;
+  });
+
+  // Group questions by category for "Matrix" view
+  const groupedQuestions = filteredQuestions.reduce<Record<string, MasterQuestion[]>>((acc, q) => {
+      if (!acc[q.category]) {
+          acc[q.category] = [];
+      }
+      acc[q.category].push(q);
+      return acc;
+  }, {});
+
+  const toggleCategory = (cat: string) => {
+    setOpenCategories(prev => ({
+      ...prev,
+      [cat]: !prev[cat]
+    }));
+  };
 
   const handleSaveQuestion = (e: FormEvent) => {
     e.preventDefault();
+
+    // FIX: Determine Standard (Form value or Active Tab fallback)
+    // This fixes the bug where adding an item without changing dropdown would fail validation
+    const finalStandard = qForm.standard || activeStandard;
+
+    // VALIDATION - Enforce ID, Category, Text
+    if (!qForm.id || !qForm.category || !qForm.text) {
+      alert("Mohon lengkapi semua field wajib: ID, Kategori, dan Pertanyaan.");
+      return;
+    }
+
     const msg = isEditingQ ? t('confirm.update') : t('confirm.add');
-    // Confirm Add/Update
     if (!window.confirm(msg)) return;
 
-    const questionData = { ...qForm, standard: activeStandard } as MasterQuestion;
+    const questionData: MasterQuestion = { 
+        id: qForm.id,
+        standard: finalStandard,
+        category: qForm.category,
+        text: qForm.text
+    };
     
-    if (isEditingQ && qForm.id) {
+    if (isEditingQ) {
       updateQuestion(questionData);
     } else {
-      addQuestion({ ...questionData, id: qForm.id || Date.now().toString() });
+      // CHECK DUPLICATE ID
+      const exists = questions.some(q => q.id === questionData.id);
+      if (exists) {
+         alert(`ID Pertanyaan '${questionData.id}' sudah digunakan. Mohon gunakan ID yang unik.`);
+         return;
+      }
+      addQuestion(questionData);
     }
     setIsQModalOpen(false);
     setQForm({});
@@ -421,429 +303,6 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
   };
 
   // --- RENDER CONTENT ---
-
-  const renderAuditSchedule = () => {
-    const plannedAudits = audits.filter(a => a.status === AuditStatus.PLANNED);
-    const otherAudits = audits.filter(a => a.status !== AuditStatus.PLANNED);
-    
-    const { daysInMonth, firstDayOfMonth, month, year } = getDaysInMonth(calendarDate);
-    const monthName = calendarDate.toLocaleString('default', { month: 'long' });
-
-    return (
-      <div className="max-w-7xl mx-auto animate-fade-in pb-20">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <CalendarDays className="text-blue-600" /> {t('nav.dashboard').replace('Dashboard', 'Audit Schedule')}
-            </h2>
-            <p className="text-slate-500">Plan and manage upcoming audit sessions.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <div className="bg-white border border-slate-300 rounded-lg p-1 flex items-center gap-1 shadow-sm mr-2">
-               <button 
-                  onClick={() => setScheduleViewMode('LIST')}
-                  className={`p-2 rounded transition-colors ${scheduleViewMode === 'LIST' ? 'bg-slate-100 text-blue-600 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
-                  title="List View"
-               >
-                 <LayoutList size={18} />
-               </button>
-               <button 
-                  onClick={() => setScheduleViewMode('CALENDAR')}
-                  className={`p-2 rounded transition-colors ${scheduleViewMode === 'CALENDAR' ? 'bg-slate-100 text-blue-600 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
-                  title="Calendar View"
-               >
-                 <Calendar size={18} />
-               </button>
-            </div>
-
-            <button 
-              onClick={() => setIsScheduleModalOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
-            >
-              <Plus size={18} /> Schedule New
-            </button>
-          </div>
-        </div>
-
-        <div className="px-6 py-6 space-y-8">
-          
-          {/* CALENDAR VIEW MODE */}
-          {scheduleViewMode === 'CALENDAR' && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
-              <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                   <Calendar size={20} className="text-slate-500" /> {monthName} {year}
-                </h3>
-                <div className="flex items-center gap-2">
-                   <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all">
-                      <ChevronLeft size={20} className="text-slate-600" />
-                   </button>
-                   <button onClick={() => changeMonth(0)} className="text-xs font-bold px-3 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors">
-                      Today
-                   </button>
-                   <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all">
-                      <ChevronRight size={20} className="text-slate-600" />
-                   </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/50">
-                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="p-3 text-center text-xs font-bold text-slate-500 uppercase">{day}</div>
-                 ))}
-              </div>
-
-              <div className="grid grid-cols-7 auto-rows-fr bg-slate-100 gap-px border-b border-slate-200">
-                 {/* Empty Slots for prev month */}
-                 {[...Array(firstDayOfMonth)].map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-white min-h-[120px] p-2"></div>
-                 ))}
-                 
-                 {/* Days */}
-                 {[...Array(daysInMonth)].map((_, i) => {
-                    const day = i + 1;
-                    // Find audits for this day
-                    const dayAudits = audits.filter(a => {
-                       const d = new Date(a.date);
-                       return d.getDate() === day && d.getMonth() === month && d.getFullYear() === year;
-                    });
-                    
-                    const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year;
-
-                    return (
-                      <div key={day} className={`bg-white min-h-[120px] p-2 transition-colors hover:bg-blue-50/30 relative group ${isToday ? 'bg-blue-50/50' : ''}`}>
-                         <div className={`text-sm font-semibold mb-2 w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}>
-                            {day}
-                         </div>
-                         <div className="space-y-1.5">
-                            {dayAudits.map(audit => (
-                               <div 
-                                 key={audit.id}
-                                 onClick={() => setRescheduleState({
-                                    isOpen: true,
-                                    audit: audit,
-                                    newDate: new Date(audit.date).toISOString().split('T')[0]
-                                 })} 
-                                 className={`text-[10px] px-2 py-1.5 rounded border cursor-pointer transition-all hover:shadow-md truncate ${
-                                   audit.status === AuditStatus.PLANNED ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' :
-                                   audit.status === AuditStatus.COMPLETED ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' :
-                                   'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                                 }`}
-                                 title={`${audit.department}\n${audit.status}`}
-                               >
-                                  <span className="font-bold block truncate">{audit.department}</span>
-                                  <span className="opacity-80 text-[9px]">{audit.standard.split(' ')[0]}</span>
-                               </div>
-                            ))}
-                         </div>
-                      </div>
-                    );
-                 })}
-                 
-                 {/* Fill remaining grid if needed */}
-                 {[...Array(42 - (daysInMonth + firstDayOfMonth))].map((_, i) => (
-                     <div key={`empty-end-${i}`} className="bg-slate-50/50 min-h-[120px]"></div>
-                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* LIST VIEW MODE */}
-          {scheduleViewMode === 'LIST' && (
-            <div className="space-y-8 animate-fade-in">
-              {/* Upcoming / Planned */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Clock size={18} className="text-blue-500" /> Upcoming (Planned)
-                  </h3>
-                  <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{plannedAudits.length}</span>
-                </div>
-                {plannedAudits.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400">No upcoming audits scheduled.</div>
-                ) : (
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-500 font-medium">
-                      <tr>
-                        <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Department</th>
-                        <th className="px-6 py-3">Standard</th>
-                        <th className="px-6 py-3">Auditor</th>
-                        <th className="px-6 py-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {plannedAudits.map(audit => (
-                        <tr key={audit.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-3 font-medium">{new Date(audit.date).toLocaleDateString()}</td>
-                          <td className="px-6 py-3">{audit.department}</td>
-                          <td className="px-6 py-3">
-                            <span className="bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">
-                              {audit.standard.split(' ')[0]}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3 flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                              {users.find(u => u.id === audit.assignedAuditorId)?.name.charAt(0) || '?'}
-                            </div>
-                            {users.find(u => u.id === audit.assignedAuditorId)?.name || 'Unassigned'}
-                          </td>
-                          <td className="px-6 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button 
-                                onClick={() => handleStartAudit(audit)}
-                                className="flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 px-2 py-1.5 rounded transition-colors mr-2 border border-green-200"
-                                title="Start & Confirm Audit Now"
-                              >
-                                <PlayCircle size={14} /> <span className="text-xs font-bold">Start</span>
-                              </button>
-                              <button 
-                                onClick={() => setRescheduleState({
-                                    isOpen: true,
-                                    audit: audit,
-                                    newDate: new Date(audit.date).toISOString().split('T')[0]
-                                })}
-                                className="text-blue-600 hover:bg-blue-50 p-2 rounded transition-colors mr-1"
-                                title="Reschedule"
-                              >
-                                <Calendar size={16} />
-                              </button>
-                              <button 
-                                onClick={() => setDeleteScheduleModal({ open: true, auditId: audit.id, auditName: audit.department })}
-                                className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors"
-                                title="Cancel Schedule"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {/* History / Active */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                  <h3 className="font-bold text-slate-800 text-sm">Active & Completed History</h3>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-white text-slate-500 font-medium sticky top-0 shadow-sm">
-                      <tr>
-                        <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Department</th>
-                        <th className="px-6 py-3">Status</th>
-                        <th className="px-6 py-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {otherAudits.length === 0 ? (
-                        <tr><td colSpan={4} className="p-6 text-center text-slate-400">No history found.</td></tr>
-                      ) : (
-                        otherAudits.map(audit => (
-                          <tr key={audit.id} className="hover:bg-slate-50">
-                            <td className="px-6 py-3 text-slate-500">{new Date(audit.date).toLocaleDateString()}</td>
-                            <td className="px-6 py-3 font-medium">{audit.department}</td>
-                            <td className="px-6 py-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-700' : 
-                                audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-700' :
-                                'bg-amber-100 text-amber-700'
-                              }`}>
-                                {audit.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                 <span className="text-xs text-slate-400 hidden lg:inline">View in Reports</span>
-                                 <button 
-                                   onClick={() => setDeleteScheduleModal({ open: true, auditId: audit.id, auditName: audit.department })}
-                                   className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors"
-                                   title="Delete Audit Record"
-                                 >
-                                   <Trash2 size={16} />
-                                 </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Schedule Modal - Z-Index 100 */}
-        {isScheduleModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="font-bold text-slate-800">Schedule New Audit</h3>
-                <button onClick={() => setIsScheduleModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                  <X size={20} />
-                </button>
-              </div>
-              <form onSubmit={handleSaveSchedule} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Standard</label>
-                  <select 
-                    value={scheduleForm.standard}
-                    onChange={e => setScheduleForm({...scheduleForm, standard: e.target.value as AuditStandard})}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    {Object.values(AuditStandard).map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department (Auditee)</label>
-                  <select 
-                    value={scheduleForm.department}
-                    // Reset Auditor when Department changes
-                    onChange={e => setScheduleForm({...scheduleForm, department: e.target.value, auditorId: ''})}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">-- Select Unit --</option>
-                    {units.map(u => (
-                      <option key={u.id} value={u.name}>{u.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assigned Auditor</label>
-                  <select 
-                    value={scheduleForm.auditorId}
-                    onChange={e => setScheduleForm({...scheduleForm, auditorId: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                    disabled={!scheduleForm.department}
-                  >
-                    <option value="">
-                      {!scheduleForm.department ? "-- Select Department First --" : "-- Select Auditor --"}
-                    </option>
-                    {users.filter(u => {
-                      // FILTER: Only show Auditors or Lead Auditors
-                      const isAuditorRole = u.role === UserRole.AUDITOR || u.role === UserRole.AUDITOR_LEAD;
-                      // FILTER: Conflict of Interest (Same department)
-                      const isConflict = scheduleForm.department && u.department === scheduleForm.department;
-                      return u.status === 'Active' && isAuditorRole && !isConflict;
-                    }).map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                    ))}
-                  </select>
-                  {scheduleForm.department && (
-                    <p className="text-[10px] text-amber-600 mt-1 italic flex items-center gap-1 bg-amber-50 p-1 rounded">
-                      <AlertTriangle size={10} /> Auditors from <strong>{scheduleForm.department}</strong> are excluded (Conflict of Interest).
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Scheduled Date</label>
-                  <input 
-                    type="date"
-                    value={scheduleForm.date}
-                    onChange={e => setScheduleForm({...scheduleForm, date: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
-                   <p className="font-bold mb-1">Estimated Deadlines:</p>
-                   <ul className="list-disc pl-4 space-y-0.5">
-                      <li>Auditee (14 Days): {new Date(new Date(scheduleForm.date).getTime() + 14*24*60*60*1000).toLocaleDateString()}</li>
-                      <li>Auditor (21 Days): {new Date(new Date(scheduleForm.date).getTime() + 21*24*60*60*1000).toLocaleDateString()}</li>
-                   </ul>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button type="button" onClick={() => setIsScheduleModalOpen(false)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">Cancel</button>
-                  <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md">Confirm Schedule</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Reschedule Modal - Z-Index 100 */}
-        {rescheduleState.isOpen && rescheduleState.audit && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="font-bold text-slate-800">Reschedule Audit</h3>
-                <button onClick={() => setRescheduleState({ ...rescheduleState, isOpen: false })} className="text-slate-400 hover:text-slate-600">
-                  <X size={20} />
-                </button>
-              </div>
-              <form onSubmit={handleRescheduleSave} className="p-6 space-y-4">
-                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 mb-2">
-                   <p className="font-bold mb-1">Current Schedule:</p>
-                   <p>{rescheduleState.audit.department}</p>
-                   <p>{new Date(rescheduleState.audit.date).toLocaleDateString()}</p>
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Date</label>
-                  <input 
-                    type="date" 
-                    value={rescheduleState.newDate}
-                    onChange={e => setRescheduleState({...rescheduleState, newDate: e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                
-                <div className="pt-2">
-                    <button type="submit" className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 font-bold shadow-md">
-                       <Save size={16} /> Update Schedule
-                    </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Delete Schedule Confirmation Modal */}
-        {deleteScheduleModal.open && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <Trash2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{t('mgmt.del.title')}</h3>
-                <p className="text-sm text-slate-500">
-                  {t('mgmt.del.msg')}
-                  <br />
-                  <span className="font-bold text-slate-700 block mt-1">{deleteScheduleModal.auditName}</span>
-                </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button 
-                  onClick={() => setDeleteScheduleModal({ open: false, auditId: null, auditName: '' })}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-                >
-                  {t('mgmt.btn.cancel')}
-                </button>
-                <button 
-                  onClick={confirmDeleteSchedule}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
-                >
-                  {t('mgmt.del.confirm')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const renderUserMgmt = () => (
     <div className="max-w-7xl mx-auto animate-fade-in">
@@ -945,7 +404,12 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
                     </span>
                   </td>
                   <td className="px-6 py-3 text-right">
-                    {user.role === UserRole.SUPER_ADMIN ? (
+                    {/* 
+                      Permission Logic: 
+                      - If Target is SuperAdmin AND Current User is NOT SuperAdmin -> Protected.
+                      - Otherwise (SuperAdmin editing SuperAdmin, or Admin editing others) -> Allowed.
+                    */}
+                    {user.role === UserRole.SUPER_ADMIN && currentUser?.role !== UserRole.SUPER_ADMIN ? (
                        <span className="flex items-center justify-end gap-1 text-xs text-slate-400 italic cursor-not-allowed bg-slate-100 px-2 py-1 rounded border border-slate-200 w-fit ml-auto">
                           <Lock size={12} /> Protected
                        </span>
@@ -1019,7 +483,12 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{t('mgmt.form.role')}</label>
                    <select className="w-full border rounded p-2 text-sm" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}>
                      {Object.values(UserRole)
-                       .filter(r => r !== UserRole.SUPER_ADMIN) // Exclude SuperAdmin from dropdown
+                       .filter(r => {
+                          // SuperAdmin can assign ANY role (including SuperAdmin). 
+                          // Admin cannot assign SuperAdmin.
+                          if (currentUser?.role === UserRole.SUPER_ADMIN) return true;
+                          return r !== UserRole.SUPER_ADMIN;
+                       })
                        .map(r => <option key={r} value={r}>{r}</option>)}
                    </select>
                  </div>
@@ -1310,137 +779,264 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
     </div>
   );
 
-  const renderTemplateMgmt = () => (
-    <div className="max-w-7xl mx-auto animate-fade-in">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <FileBox className="text-blue-600" /> {t('mgmt.tmpl.title')}
-            </h2>
-            <p className="text-slate-500">{t('mgmt.tmpl.desc')}</p>
-          </div>
-          <button 
-            onClick={() => { setQForm({}); setIsEditingQ(false); setIsQModalOpen(true); }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <Plus size={18} /> Add Item
-          </button>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {Object.values(AuditStandard).map(std => (
-            <button 
-              key={std}
-              onClick={() => setActiveStandard(std)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                activeStandard === std ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {std.split(' ')[0]}...
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-6 py-6">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-           <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2">{activeStandard}</h3>
-           <div className="space-y-4">
-             {filteredQuestions.length === 0 ? (
-               <div className="text-center text-slate-400 py-8">No questions defined for this standard yet.</div>
-             ) : (
-               filteredQuestions.map(q => (
-                 <div key={q.id} className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors group">
-                   <div className="w-16 shrink-0">
-                     <div className="font-bold text-slate-700">{q.category}</div>
-                     <div className="text-xs text-slate-400 font-mono">{q.id}</div>
-                   </div>
-                   <div className="flex-1 text-slate-800 text-sm leading-relaxed">{q.text}</div>
-                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setQForm(q); setIsEditingQ(true); setIsQModalOpen(true); }} className="p-1.5 bg-white border rounded text-blue-600 hover:bg-blue-50"><Edit size={14}/></button>
-                      <button 
-                        onClick={() => setDeleteTemplateModal({ open: true, questionId: q.id, questionText: q.text })}
-                        className="p-1.5 bg-white border rounded text-red-600 hover:bg-red-50"
-                        title="Delete Item"
-                      >
-                        <Trash2 size={14}/>
-                      </button>
-                   </div>
-                 </div>
-               ))
-             )}
-           </div>
-        </div>
-      </div>
-
-      {/* Template Modal - Z-Index 100 */}
-      {isQModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
-             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800">{isEditingQ ? 'Edit Item' : 'Add Item'}</h3>
-                <button onClick={() => setIsQModalOpen(false)}><X size={20} /></button>
-             </div>
-             <form onSubmit={handleSaveQuestion} className="p-6 space-y-4">
-                <div className="grid grid-cols-4 gap-4">
-                   <div className="col-span-1">
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ID</label>
-                     <input required type="text" className="w-full border rounded p-2 text-sm" value={qForm.id || ''} onChange={e => setQForm({...qForm, id: e.target.value})} disabled={isEditingQ} />
-                   </div>
-                   <div className="col-span-3">
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label>
-                     <input required type="text" className="w-full border rounded p-2 text-sm" value={qForm.category || ''} onChange={e => setQForm({...qForm, category: e.target.value})} />
-                   </div>
+  const renderTemplateMgmt = () => {
+    // Access Control: Strict Check
+    if (currentUser?.role !== UserRole.SUPER_ADMIN && currentUser?.role !== UserRole.ADMIN) {
+        return (
+            <div className="h-[500px] flex flex-col items-center justify-center text-center text-slate-500 p-8 animate-fade-in">
+                <div className="bg-slate-100 p-6 rounded-full mb-4">
+                    <Shield size={48} className="text-slate-400" />
                 </div>
-                <div>
-                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Question Text / Indicator</label>
-                   <textarea required rows={4} className="w-full border rounded p-2 text-sm" value={qForm.text || ''} onChange={e => setQForm({...qForm, text: e.target.value})} />
-                </div>
-                <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">{t('mgmt.btn.save')}</button>
-             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Template Item Confirmation Modal */}
-      {deleteTemplateModal.open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-              <Trash2 size={24} />
+                <h3 className="text-xl font-bold text-slate-700">Akses Dibatasi</h3>
+                <p className="max-w-md mx-auto mt-2">
+                    Anda tidak memiliki izin untuk mengelola instrumen audit. 
+                    Hanya Administrator yang dapat mengubah standar dan butir pertanyaan.
+                </p>
             </div>
+        );
+    }
+
+    return (
+      <div className="max-w-7xl mx-auto animate-fade-in">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200">
+          <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">{t('mgmt.del.title')}</h3>
-              <p className="text-sm text-slate-500">
-                {t('mgmt.del.msg')}
-              </p>
-              {deleteTemplateModal.questionText && (
-                  <div className="bg-slate-50 p-2 rounded border border-slate-100 text-xs text-slate-600 italic mt-2 text-left line-clamp-3">
-                      "{deleteTemplateModal.questionText}"
-                  </div>
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <FileBox className="text-blue-600" /> {t('mgmt.tmpl.title')}
+              </h2>
+              <p className="text-slate-500">{t('mgmt.tmpl.desc')}</p>
+            </div>
+            <button 
+              onClick={() => { setQForm({ standard: activeStandard }); setIsEditingQ(false); setIsQModalOpen(true); }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <Plus size={18} /> Add Item
+            </button>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              {/* Standard Tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide max-w-full md:max-w-3xl">
+                {Object.values(AuditStandard).map((std) => {
+                  // Explicit labels for specific standards
+                  let label: string = std;
+                  if (std.includes('LAM TEKNIK')) label = 'LAM TEKNIK';
+                  else if (std.includes('LAM INFOKOM')) label = 'LAM INFOKOM';
+                  else if (std.includes('BAN-PT')) label = 'BAN-PT';
+                  else if (std.includes('Permendiktisaintek')) label = 'Permendiktisaintek';
+
+                  return (
+                    <button 
+                      key={std}
+                      onClick={() => setActiveStandard(std)}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all border ${
+                        activeStandard === std 
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Question Search */}
+              <div className="relative w-full md:w-64">
+                  <input 
+                    type="text" 
+                    placeholder="Cari butir pertanyaan..."
+                    value={qSearchTerm}
+                    onChange={(e) => setQSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <h3 className="font-bold text-lg text-slate-800">{activeStandard}</h3>
+                <span className="text-xs bg-slate-100 px-3 py-1 rounded-full font-bold text-slate-600 border border-slate-200">
+                    Total: {filteredQuestions.length} Butir
+                </span>
+            </div>
+            
+            {/* MATRIX VIEW GROUPED BY CATEGORY */}
+            <div className="space-y-6">
+              {Object.keys(groupedQuestions).length === 0 ? (
+                <div className="text-center text-slate-400 py-12 border-2 border-dashed border-slate-100 rounded-xl">
+                    <Search size={32} className="mx-auto mb-2 opacity-20"/>
+                    <p>Tidak ada butir pertanyaan yang ditemukan.</p>
+                </div>
+              ) : (
+                Object.entries(groupedQuestions).map(([category, qs], idx) => {
+                  const isOpen = openCategories[category] !== false; // Default open
+
+                  return (
+                    <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden">
+                        {/* Category Header */}
+                        <button 
+                          onClick={() => toggleCategory(category)}
+                          className="w-full flex justify-between items-center p-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                        >
+                          <div className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                              <ListChecks size={18} className="text-blue-500" />
+                              {category}
+                          </div>
+                          <div className="flex items-center gap-3">
+                              <span className="text-xs font-semibold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-500">
+                                {qs.length} item
+                              </span>
+                              {isOpen ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                          </div>
+                        </button>
+                        
+                        {/* Questions List */}
+                        {isOpen && (
+                          <div className="divide-y divide-slate-100">
+                              {qs.map(q => (
+                                  <div key={q.id} className="p-4 flex gap-4 items-start bg-white hover:bg-blue-50/30 transition-colors group">
+                                    <div className="shrink-0 w-16 pt-0.5">
+                                        <div className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-center border border-slate-200">
+                                          {q.id}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 text-sm text-slate-700 leading-relaxed">
+                                        {q.text}
+                                    </div>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button 
+                                          onClick={() => { setQForm(q); setIsEditingQ(true); setIsQModalOpen(true); }} 
+                                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
+                                          title="Edit"
+                                        >
+                                          <Edit size={16} />
+                                        </button>
+                                        <button 
+                                          onClick={() => setDeleteTemplateModal({ open: true, questionId: q.id, questionText: q.text })}
+                                          className="p-1.5 text-red-600 hover:bg-red-100 rounded"
+                                          title="Hapus"
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                  </div>
+                              ))}
+                          </div>
+                        )}
+                    </div>
+                  );
+                })
               )}
             </div>
-            <div className="flex gap-3 pt-2">
-              <button 
-                onClick={() => setDeleteTemplateModal({ open: false, questionId: null, questionText: '' })}
-                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-              >
-                {t('mgmt.btn.cancel')}
-              </button>
-              <button 
-                onClick={confirmDeleteTemplate}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
-              >
-                {t('mgmt.del.confirm')}
-              </button>
-            </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Template Modal - Z-Index 100 */}
+        {isQModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                  <h3 className="font-bold text-slate-800">{isEditingQ ? 'Edit Item' : 'Add Item'}</h3>
+                  <button onClick={() => setIsQModalOpen(false)}><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSaveQuestion} className="p-6 space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Standard</label>
+                        <select 
+                          className="w-full border rounded p-2 text-sm bg-white" 
+                          value={qForm.standard || activeStandard} 
+                          onChange={e => setQForm({...qForm, standard: e.target.value})}
+                        >
+                          {Object.values(AuditStandard).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="col-span-1">
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ID</label>
+                      <input 
+                        required 
+                        type="text" 
+                        className="w-full border rounded p-2 text-sm" 
+                        value={qForm.id || ''} 
+                        onChange={e => setQForm({...qForm, id: e.target.value})} 
+                        disabled={isEditingQ} 
+                        placeholder="e.g. C.1" 
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Category</label>
+                      <input 
+                        required 
+                        type="text" 
+                        className="w-full border rounded p-2 text-sm" 
+                        value={qForm.category || ''} 
+                        onChange={e => setQForm({...qForm, category: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Question Text / Indicator</label>
+                    <textarea 
+                        required 
+                        rows={4} 
+                        className="w-full border rounded p-2 text-sm" 
+                        value={qForm.text || ''} 
+                        onChange={e => setQForm({...qForm, text: e.target.value})} 
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">{t('mgmt.btn.save')}</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Template Item Confirmation Modal */}
+        {deleteTemplateModal.open && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{t('mgmt.del.title')}</h3>
+                <p className="text-sm text-slate-500">
+                  {t('mgmt.del.msg')}
+                </p>
+                {deleteTemplateModal.questionText && (
+                    <div className="bg-slate-50 p-2 rounded border border-slate-100 text-xs text-slate-600 italic mt-2 text-left line-clamp-3">
+                        "{deleteTemplateModal.questionText}"
+                    </div>
+                )}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setDeleteTemplateModal({ open: false, questionId: null, questionText: '' })}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                >
+                  {t('mgmt.btn.cancel')}
+                </button>
+                <button 
+                  onClick={confirmDeleteTemplate}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                >
+                  {t('mgmt.del.confirm')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const renderSettings = () => (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -1620,7 +1216,6 @@ const ManagementPlaceholder: FC<Props> = ({ view, audits = [], onCreateAudit, on
     case 'MASTER_DATA': return renderMasterData();
     case 'TEMPLATE_MGMT': return renderTemplateMgmt();
     case 'SETTINGS': return renderSettings();
-    case 'AUDIT_SCHEDULE': return renderAuditSchedule();
     default: return <div>View not found</div>;
   }
 };
