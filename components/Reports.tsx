@@ -233,9 +233,9 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
 
     return (
       <div className="animate-fade-in relative">
-        {/* Sticky Header */}
+        {/* Sticky Header - Reduced Padding */}
         <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50">
-          <div className="max-w-7xl mx-auto px-8 py-6 flex flex-col md:flex-row justify-between items-end gap-4">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                  <PieChart className="text-blue-600" /> {t('repo.title')}
@@ -573,9 +573,9 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
         </button>
       </div>
 
-      {/* Sticky Header for Detail View */}
-      <div className="sticky top-0 z-30 -mx-8 px-8 pb-6 pt-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50 mb-8">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      {/* Sticky Header for Detail View - Reduced Padding */}
+      <div className="sticky top-0 z-30 -mx-6 px-6 pb-4 pt-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50 mb-8">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-2xl shadow-lg shadow-blue-500/30 flex-shrink-0">
                <ShieldCheck size={32} className="text-white" />

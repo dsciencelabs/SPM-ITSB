@@ -5,7 +5,7 @@ import {
   Users, Settings, Database, CheckCircle2, XCircle, X, Plus, Edit, Trash2, Search, Shield, 
   UserCog, Briefcase, Save, FileBox, Clock,
   Power, UserCheck, Info, Crown, Contact, Loader2, HelpCircle,
-  Filter, Lock, ListChecks, ChevronDown, ChevronUp
+  Filter, Lock, ListChecks, ChevronDown, ChevronUp, Upload, Palette
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useMasterData, Unit, MasterQuestion } from '../MasterDataContext';
@@ -93,6 +93,17 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   // --- HANDLERS: SETTINGS ---
+  const handleLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updateSettings({ logoUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const confirmSaveSettings = () => {
     setSaveSettingsModal(false);
     setIsSavingSettings(true);
@@ -306,8 +317,8 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
   const renderUserMgmt = () => (
     <div className="max-w-7xl mx-auto animate-fade-in">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-6 border-b border-slate-200 flex justify-between items-center">
+      {/* Sticky Header - Reduced Padding */}
+      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="text-blue-600" /> {t('mgmt.user.title')}
@@ -639,8 +650,8 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
   const renderMasterData = () => (
     <div className="max-w-7xl mx-auto animate-fade-in">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-6 border-b border-slate-200 flex justify-between items-center">
+      {/* Sticky Header - Reduced Padding */}
+      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Database className="text-blue-600" /> {t('master.title')}
@@ -798,8 +809,8 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
     return (
       <div className="max-w-7xl mx-auto animate-fade-in">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200">
+        {/* Sticky Header - Reduced Padding */}
+        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-3 border-b border-slate-200">
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -1003,221 +1014,189 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
         {deleteTemplateModal.open && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                <Trash2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">{t('mgmt.del.title')}</h3>
-                <p className="text-sm text-slate-500">
-                  {t('mgmt.del.msg')}
-                </p>
-                {deleteTemplateModal.questionText && (
-                    <div className="bg-slate-50 p-2 rounded border border-slate-100 text-xs text-slate-600 italic mt-2 text-left line-clamp-3">
-                        "{deleteTemplateModal.questionText}"
-                    </div>
-                )}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button 
-                  onClick={() => setDeleteTemplateModal({ open: false, questionId: null, questionText: '' })}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-                >
-                  {t('mgmt.btn.cancel')}
-                </button>
-                <button 
-                  onClick={confirmDeleteTemplate}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
-                >
-                  {t('mgmt.del.confirm')}
-                </button>
-              </div>
+               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                  <Trash2 size={24} />
+               </div>
+               <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-2">{t('mgmt.del.title')}</h3>
+                  <p className="text-sm text-slate-500">
+                     {t('mgmt.del.msg')}
+                     <br />
+                     <span className="font-bold text-slate-700 block mt-1 line-clamp-2">"{deleteTemplateModal.questionText}"</span>
+                  </p>
+               </div>
+               <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => setDeleteTemplateModal({ open: false, questionId: null, questionText: '' })}
+                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                  >
+                    {t('mgmt.btn.cancel')}
+                  </button>
+                  <button 
+                    onClick={confirmDeleteTemplate}
+                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                  >
+                    {t('mgmt.del.confirm')}
+                  </button>
+               </div>
             </div>
           </div>
         )}
       </div>
     );
-  }
+  };
 
   const renderSettings = () => (
     <div className="max-w-4xl mx-auto animate-fade-in">
-       {/* Sticky Header */}
-       <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-6 border-b border-slate-200">
-         <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-           <Settings className="text-blue-600" /> {t('mgmt.set.title')}
-         </h2>
-         <p className="text-slate-500">{t('mgmt.set.desc')}</p>
-       </div>
-
-       <div className="px-6 py-6">
-         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 space-y-8">
-            <div>
-               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                  <Briefcase size={20} className="text-slate-400" /> {t('mgmt.set.brand')}
-               </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('mgmt.set.appName')}</label>
-                     <input 
-                       type="text" 
-                       className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                       value={settings.appName}
-                       onChange={e => updateSettings({ appName: e.target.value })}
-                     />
-                  </div>
-                  <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('mgmt.set.theme')}</label>
-                     <div className="flex gap-3">
-                        {['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0f172a'].map(color => (
-                          <button 
-                            key={color}
-                            onClick={() => updateSettings({ themeColor: color })}
-                            className={`w-8 h-8 rounded-full shadow-sm transition-transform hover:scale-110 ${settings.themeColor === color ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
-                     </div>
-                  </div>
-               </div>
-
-               {/* Logo Upload Section */}
-               <div className="mt-6 pt-6 border-t border-slate-100">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-3">{t('mgmt.set.logo')}</label>
-                  <div className="flex items-start gap-6">
-                    <div className="shrink-0 relative group">
-                      <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
-                        {settings.logoUrl ? (
-                          <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
-                        ) : (
-                          <Shield size={32} className="text-slate-300" />
-                        )}
-                      </div>
-                      {settings.logoUrl && (
-                        <button 
-                          onClick={() => updateSettings({ logoUrl: null })}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all hover:scale-110"
-                        >
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <label className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
-                        <Plus size={16} />
-                        {t('mgmt.set.upload')}
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/png, image/jpeg, image/svg+xml"
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              if (file.size > 2 * 1024 * 1024) {
-                                alert("File size must be less than 2MB");
-                                return;
-                              }
-                              const reader = new FileReader();
-                              reader.onload = (event) => {
-                                if (event.target?.result) {
-                                  updateSettings({ logoUrl: event.target.result as string });
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                      <p className="mt-2 text-xs text-slate-500 max-w-sm leading-relaxed">
-                        Upload your organization's logo (PNG, JPG, or SVG). Max size 2MB. This will replace the default shield icon on the sidebar and login page.
-                      </p>
-                    </div>
-                  </div>
-               </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-100">
-               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                  <Clock size={20} className="text-slate-400" /> {t('mgmt.set.cycle')}
-               </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('mgmt.set.period')}</label>
-                     <input 
-                       type="text" 
-                       className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                       value={settings.auditPeriod}
-                       onChange={e => updateSettings({ auditPeriod: e.target.value })}
-                     />
-                  </div>
-                  <div>
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('mgmt.set.std')}</label>
-                     <select 
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={settings.defaultStandard}
-                        onChange={e => updateSettings({ defaultStandard: e.target.value as AuditStandard })}
-                     >
-                        {Object.values(AuditStandard).map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                     </select>
-                  </div>
-               </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-100 flex justify-end">
-               <button 
-                 onClick={() => setSaveSettingsModal(true)}
-                 disabled={isSavingSettings}
-                 className="bg-slate-900 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-               >
-                  {isSavingSettings ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
-                  {isSavingSettings ? 'Menyimpan...' : t('mgmt.set.save')}
-               </button>
-            </div>
-         </div>
-       </div>
-
-       {/* Save Settings Confirmation Modal */}
-       {saveSettingsModal && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
-               <HelpCircle size={24} />
-             </div>
-             <div>
-               <h3 className="text-lg font-bold text-slate-900 mb-2">Konfirmasi Simpan</h3>
-               <p className="text-sm text-slate-500">
-                 Apakah Anda yakin ingin melakukan Simpan Perubahan Sistem?
-               </p>
-             </div>
-             <div className="flex gap-3 pt-2">
-               <button 
-                 onClick={() => setSaveSettingsModal(false)}
-                 className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-               >
-                 {t('mgmt.btn.cancel')}
-               </button>
-               <button 
-                 onClick={confirmSaveSettings}
-                 className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
-               >
-                 Ya, Simpan
-               </button>
-             </div>
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200 flex justify-between items-center mb-6">
+           <div>
+             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <Settings className="text-blue-600" /> {t('mgmt.set.title')}
+             </h2>
+             <p className="text-slate-500">{t('mgmt.set.desc')}</p>
            </div>
-         </div>
-       )}
+           <button 
+             onClick={() => setSaveSettingsModal(true)}
+             className="bg-blue-600 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20 font-bold"
+           >
+             <Save size={18} /> {t('mgmt.set.save')}
+           </button>
+        </div>
+
+        <div className="px-6 space-y-6 pb-20">
+           {/* SECTION 1: BRANDING */}
+           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+               <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2 font-bold text-slate-700">
+                   <Palette size={18} className="text-blue-500" /> {t('mgmt.set.brand')}
+               </div>
+               <div className="p-6 space-y-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">{t('mgmt.set.appName')}</label>
+                          <input 
+                            type="text" 
+                            value={settings.appName}
+                            onChange={(e) => updateSettings({ appName: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">{t('mgmt.set.theme')}</label>
+                          <div className="flex gap-2">
+                             <input 
+                               type="color" 
+                               value={settings.themeColor}
+                               onChange={(e) => updateSettings({ themeColor: e.target.value })}
+                               className="h-10 w-16 p-1 rounded cursor-pointer border border-slate-300"
+                             />
+                             <input 
+                                type="text"
+                                value={settings.themeColor}
+                                onChange={(e) => updateSettings({ themeColor: e.target.value })}
+                                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                             />
+                          </div>
+                      </div>
+                   </div>
+
+                   <div>
+                       <label className="block text-sm font-bold text-slate-700 mb-2">{t('mgmt.set.logo')}</label>
+                       <div className="flex items-start gap-6">
+                          <div className="w-24 h-24 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shrink-0">
+                              {settings.logoUrl ? (
+                                  <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                              ) : (
+                                  <Shield size={32} className="text-slate-300" />
+                              )}
+                          </div>
+                          <div className="flex-1">
+                              <label className="cursor-pointer inline-flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors mb-2">
+                                  <Upload size={16} /> {t('mgmt.set.upload')}
+                                  <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                              </label>
+                              <p className="text-xs text-slate-500">
+                                Recommended: PNG or SVG, max 500KB. Transparent background preferred.
+                              </p>
+                          </div>
+                       </div>
+                   </div>
+               </div>
+           </div>
+
+           {/* SECTION 2: AUDIT CYCLE */}
+           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+               <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2 font-bold text-slate-700">
+                   <Clock size={18} className="text-blue-500" /> {t('mgmt.set.cycle')}
+               </div>
+               <div className="p-6 space-y-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">{t('mgmt.set.period')}</label>
+                          <input 
+                            type="text" 
+                            value={settings.auditPeriod}
+                            onChange={(e) => updateSettings({ auditPeriod: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="e.g. 2024/2025 Genap"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">{t('mgmt.set.std')}</label>
+                          <select 
+                            value={settings.defaultStandard}
+                            onChange={(e) => updateSettings({ defaultStandard: e.target.value as AuditStandard })}
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                          >
+                             {Object.values(AuditStandard).map(std => (
+                                 <option key={std} value={std}>{std}</option>
+                             ))}
+                          </select>
+                      </div>
+                   </div>
+               </div>
+           </div>
+        </div>
+
+        {/* Save Confirmation Modal */}
+        {saveSettingsModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
+                   <Save size={24} />
+                </div>
+                <div>
+                   <h3 className="text-lg font-bold text-slate-900 mb-2">Simpan Perubahan?</h3>
+                   <p className="text-sm text-slate-500">
+                     Perubahan pengaturan sistem akan diterapkan ke seluruh aplikasi.
+                   </p>
+                </div>
+                <div className="flex gap-3 pt-2">
+                   <button 
+                     onClick={() => setSaveSettingsModal(false)}
+                     className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                   >
+                     Batal
+                   </button>
+                   <button 
+                     onClick={confirmSaveSettings}
+                     className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+                   >
+                     {isSavingSettings ? <Loader2 size={16} className="animate-spin" /> : 'Ya, Simpan'}
+                   </button>
+                </div>
+             </div>
+          </div>
+        )}
     </div>
   );
 
-  // Main Switch
-  switch (view) {
-    case 'USER_MGMT': return renderUserMgmt();
-    case 'MASTER_DATA': return renderMasterData();
-    case 'TEMPLATE_MGMT': return renderTemplateMgmt();
-    case 'SETTINGS': return renderSettings();
-    default: return <div>View not found</div>;
-  }
+  if (view === 'USER_MGMT') return renderUserMgmt();
+  if (view === 'MASTER_DATA') return renderMasterData();
+  if (view === 'TEMPLATE_MGMT') return renderTemplateMgmt();
+  if (view === 'SETTINGS') return renderSettings();
+
+  return null;
 };
 
 export default ManagementPlaceholder;

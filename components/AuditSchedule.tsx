@@ -283,8 +283,8 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in pb-20">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        {/* Sticky Header - Reduced Padding */}
+        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <CalendarDays className="text-blue-600" /> {t('nav.dashboard').replace('Dashboard', 'Audit Schedule')}

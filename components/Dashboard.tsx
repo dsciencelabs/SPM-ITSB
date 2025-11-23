@@ -64,9 +64,9 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
 
   return (
     <div className="animate-fade-in">
-      {/* Sticky Header */}
+      {/* Sticky Header - Reduced Padding */}
       <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50">
-        <div className="max-w-7xl mx-auto px-8 py-6 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div>
             <div className="flex items-center gap-2 mb-1">
                <h2 className="text-2xl font-bold text-slate-900">{t('dash.title')}</h2>

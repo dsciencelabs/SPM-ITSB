@@ -331,10 +331,10 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, onUpdateAudit, onCompl
          </div>
       )}
 
-      {/* Header Section */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6 flex-shrink-0 z-10 relative">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1 mr-4">
+      {/* Header Section - Reduced Padding */}
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 mb-4 flex-shrink-0 z-10 relative">
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex-1 mr-2">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-slate-900">{audit.name || audit.department}</h2>
               <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full border border-blue-100">
