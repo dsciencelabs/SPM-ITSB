@@ -91,8 +91,8 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
   });
   const [confirmQuestionModal, setConfirmQuestionModal] = useState(false);
   
-  // State to track open/closed categories in the matrix view
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+  // State to track currently open category (Single string instead of object for mutual exclusivity)
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   // --- HANDLERS: SETTINGS ---
   const handleLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -269,10 +269,8 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
   }, {});
 
   const toggleCategory = (cat: string) => {
-    setOpenCategories(prev => ({
-      ...prev,
-      [cat]: !prev[cat]
-    }));
+    // If clicking the active one, close it. If clicking a new one, open it (and close others implicitly)
+    setActiveCategory(prev => (prev === cat ? null : cat));
   };
 
   const handleSaveQuestion = (e: FormEvent) => {
@@ -502,16 +500,37 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
   const renderMasterData = () => (
     <div className="flex flex-col h-full animate-fade-in bg-slate-50">
-      <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
-        <div><h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Database className="text-blue-600" /> {t('master.title')}</h2><p className="text-slate-500">{t('master.desc')}</p></div>
-        <button onClick={() => { setUnitForm({}); setIsEditingUnit(false); setIsUnitModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"><Plus size={18} /> {t('master.btn.add')}</button>
+      <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Database className="text-blue-600" /> {t('master.title')}
+          </h2>
+          <p className="text-slate-500">{t('master.desc')}</p>
+        </div>
+        
+        <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-stretch md:items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 md:w-64">
+                 <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                 <input 
+                   type="text" 
+                   placeholder="Cari Unit Kerja..." 
+                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white shadow-sm"
+                   value={unitSearchTerm}
+                   onChange={(e) => setUnitSearchTerm(e.target.value)}
+                 />
+            </div>
+
+            <button onClick={() => { setUnitForm({}); setIsEditingUnit(false); setIsUnitModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-sm shrink-0">
+              <Plus size={18} /> 
+              <span className="hidden md:inline">{t('master.btn.add')}</span>
+              <span className="md:hidden">Tambah</span>
+            </button>
+        </div>
       </div>
+
       <div className="flex-1 overflow-y-auto px-6 py-6 pb-20">
          <div className="max-w-7xl mx-auto bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="p-4 border-b border-slate-100 flex items-center gap-4">
-                <Search className="text-slate-400" size={18} />
-                <input type="text" placeholder="Cari Unit Kerja..." className="w-full text-sm outline-none" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-            </div>
             <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-500 font-medium"><tr><th className="px-6 py-3">{t('master.th.code')}</th><th className="px-6 py-3">{t('master.th.name')}</th><th className="px-6 py-3">{t('master.th.type')}</th><th className="px-6 py-3">{t('master.th.faculty')}</th><th className="px-6 py-3 text-right">{t('mgmt.th.action')}</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
@@ -570,25 +589,6 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
               {/* Action Buttons Group */}
               <div className="flex gap-2 shrink-0">
-                 {/* Expand/Collapse */}
-                 <div className="flex bg-white border border-slate-300 rounded-lg shadow-sm p-0.5">
-                    <button 
-                      onClick={() => setOpenCategories(Object.keys(groupedQuestions).reduce((acc, key) => ({...acc, [key]: true}), {}))} 
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                      title="Expand All"
-                    >
-                      <LayoutList size={20} />
-                    </button>
-                    <div className="w-px bg-slate-200 my-1"></div>
-                    <button 
-                      onClick={() => setOpenCategories({})} 
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                      title="Collapse All"
-                    >
-                      <Layers size={20} />
-                    </button>
-                 </div>
-
                  <button 
                    onClick={() => { setQForm({ standard: activeStandard }); setIsEditingQ(false); setIsQModalOpen(true); }} 
                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
@@ -606,14 +606,14 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
             <div className="max-w-7xl mx-auto">
                 <div className="space-y-4">
                     {Object.entries(groupedQuestions).map(([category, items]) => (
-                        <div key={category} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div key={category} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300">
                             <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => toggleCategory(category)}>
                                 <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><ListChecks size={16} className="text-blue-500" /> {category} <span className="text-xs font-normal text-slate-400">({items.length} items)</span></h4>
-                                {openCategories[category] ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                                {activeCategory === category ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                             </div>
-                            {/* Render if Open (Initialized as false/undefined = Collapsed) */}
-                            {(openCategories[category]) && (
-                                <div className="divide-y divide-slate-100">
+                            {/* Render if Active (Single Item Open) */}
+                            {(activeCategory === category) && (
+                                <div className="divide-y divide-slate-100 animate-fade-in">
                                     {items.map(q => (
                                         <div key={q.id} className="p-4 hover:bg-slate-50 flex items-start justify-between gap-4">
                                             <div className="flex-1">
