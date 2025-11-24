@@ -163,8 +163,10 @@ const Login: FC = () => {
                 ))}
              </div>
              
-             <div className="mt-12 text-slate-600 text-sm">
-                &copy; {new Date().getFullYear()} {settings.appName}. All Rights Reserved.
+             <div className="mt-12 text-center">
+                <p className="text-slate-500 text-xs font-medium">
+                   Developer App : <span className="font-bold text-slate-400">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
+                </p>
              </div>
           </div>
         )}

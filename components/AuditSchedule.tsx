@@ -17,7 +17,10 @@ import {
   CheckCircle,
   MoreVertical,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Play,
+  PieChart,
+  CalendarClock
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useMasterData } from '../MasterDataContext';
@@ -30,9 +33,10 @@ interface AuditScheduleProps {
   onCreateAudit: (audit: AuditSession) => void;
   onUpdateAudit: (audit: AuditSession) => void;
   onDeleteAudit: (id: string) => void;
+  onViewReport: (audit: AuditSession) => void; 
 }
 
-const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdateAudit, onDeleteAudit }) => {
+const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdateAudit, onDeleteAudit, onViewReport }) => {
   const { t } = useLanguage();
   const { units, questions } = useMasterData();
   const { users, currentUser } = useAuth();
@@ -40,14 +44,15 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
   const { addNotification } = useNotification();
 
   // States
-  const [scheduleViewMode, setScheduleViewMode] = useState<'LIST' | 'CALENDAR'>('CALENDAR'); // Default to Calendar for better visibility
+  const [scheduleViewMode, setScheduleViewMode] = useState<'LIST' | 'CALENDAR'>('LIST'); 
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     department: '',
     standard: settings.defaultStandard || AuditStandard.PERMENDIKTISAINTEK_2025,
     auditorId: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    auditName: '' 
   });
 
   // Reschedule & Delete States
@@ -60,23 +65,49 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
   // Confirmation Modal State for Reschedule
   const [rescheduleConfirmOpen, setRescheduleConfirmOpen] = useState(false);
 
+  // NEW: Confirmation Modal for CREATE Schedule
+  const [createConfirmOpen, setCreateConfirmOpen] = useState(false);
+
   const [deleteScheduleModal, setDeleteScheduleModal] = useState<{ open: boolean; auditId: string | null; auditName: string }>({
     open: false,
     auditId: null,
     auditName: ''
   });
 
-  // Access Control for Reschedule
+  // START AUDIT CONFIRMATION STATES
+  const [startConfirmModal, setStartConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'SINGLE' | 'ALL';
+    audit: AuditSession | null;
+  }>({
+    isOpen: false,
+    type: 'SINGLE',
+    audit: null
+  });
+
+  // Access Control for Reschedule & Start
   const canManageSchedule = 
     currentUser?.role === UserRole.SUPER_ADMIN || 
     currentUser?.role === UserRole.ADMIN || 
     currentUser?.role === UserRole.AUDITOR_LEAD;
+  
+  const canStartAudit = canManageSchedule;
+
+  // Access Control for Viewing Reports in History
+  const canViewReports = 
+    currentUser?.role === UserRole.SUPER_ADMIN || 
+    currentUser?.role === UserRole.ADMIN || 
+    currentUser?.role === UserRole.AUDITOR_LEAD;
+
+  // Access Control for Deleting History (Strict: Only Admin/SuperAdmin)
+  const canDeleteHistory = 
+    currentUser?.role === UserRole.SUPER_ADMIN || 
+    currentUser?.role === UserRole.ADMIN;
 
   // Calendar Helpers
   const changeMonth = (offset: number) => {
     setCalendarDate(prev => {
       const newDate = new Date(prev);
-      // IMPORTANT: Set date to 1 to avoid skipping months (e.g. Jan 31 -> Feb)
       newDate.setDate(1); 
       newDate.setMonth(newDate.getMonth() + offset);
       return newDate;
@@ -99,14 +130,15 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
   const isPlanOverdue = (dateStr: string) => {
     const auditDate = new Date(dateStr);
     const today = new Date();
-    // Reset time part to compare dates correctly
     auditDate.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
     return auditDate < today;
   };
 
   // Handlers
-  const handleSaveSchedule = (e: FormEvent) => {
+
+  // 1. Initiate: Validate form only
+  const handleInitiateSchedule = (e: FormEvent) => {
     e.preventDefault();
     
     if (!scheduleForm.department) {
@@ -121,9 +153,16 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
       alert("Mohon tentukan tanggal audit.");
       return;
     }
+    if (!scheduleForm.auditName) {
+      alert("Mohon isi Nama Audit.");
+      return;
+    }
 
-    if (!window.confirm(t('confirm.add'))) return;
+    setCreateConfirmOpen(true);
+  };
 
+  // 2. Execute: Create Data after confirmation
+  const executeSaveSchedule = () => {
     // Populate questions based on standard
     const relevantQuestions = questions.filter(q => q.standard === scheduleForm.standard);
     
@@ -137,10 +176,10 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
 
     const newAudit: AuditSession = {
       id: Date.now().toString(),
-      name: `Audit ${scheduleForm.department} - ${settings.auditPeriod}`,
+      name: scheduleForm.auditName, 
       department: scheduleForm.department,
       standard: scheduleForm.standard,
-      status: AuditStatus.PLANNED,
+      status: AuditStatus.PENDING_SCHEDULING, // UPDATED: Changed from PLANNED
       date: startDate.toISOString(),
       auditeeDeadline: auditeeDeadline.toISOString(),
       auditorDeadline: auditorDeadline.toISOString(),
@@ -165,59 +204,95 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
     if (scheduleForm.auditorId) {
       addNotification(
         scheduleForm.auditorId, 
-        "New Audit Assignment", 
-        `You have been assigned to audit ${scheduleForm.department} scheduled on ${dateStr}.`
+        "New Audit Pending", 
+        `Audit for ${scheduleForm.department} scheduled. Waiting for Dept Head confirmation.`
       );
     }
 
-    // 2. Notify Auditee (Dept Head & Staff of that Dept)
-    const auditees = users.filter(u => u.department === scheduleForm.department);
-    auditees.forEach(u => {
+    // 2. Notify Auditee (Dept Head)
+    const deptHeads = users.filter(u => u.department === scheduleForm.department && u.role === UserRole.DEPT_HEAD);
+    deptHeads.forEach(u => {
       addNotification(
         u.id,
-        "Upcoming Audit Scheduled",
-        `An audit for ${scheduleForm.department} has been scheduled for ${dateStr}. Please prepare your documents.`
+        "Konfirmasi Jadwal Audit",
+        `Audit baru dijadwalkan untuk ${scheduleForm.department} pada ${dateStr}. Mohon konfirmasi (Setujui/Tolak).`
       );
     });
 
+    setCreateConfirmOpen(false);
     setIsScheduleModalOpen(false);
-    alert("✅ Jadwal Audit Berhasil Dikonfirmasi dan Disimpan! Notifikasi (In-App & Email) telah dikirim.");
     
+    alert("✅ Jadwal Berhasil Dibuat! Menunggu Konfirmasi Kepala Unit.");
+    
+    // Reset Form
     setScheduleForm({
       department: '',
       standard: settings.defaultStandard || AuditStandard.PERMENDIKTISAINTEK_2025,
       auditorId: '',
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      auditName: ''
     });
   };
 
-  const handleStartAudit = (audit: AuditSession) => {
-    if (window.confirm("Konfirmasi: Apakah Anda ingin mengaktifkan audit ini sekarang? Status akan berubah menjadi 'In Progress'.")) {
-      onUpdateAudit({
-        ...audit,
-        status: AuditStatus.IN_PROGRESS
-      });
+  // --- START AUDIT LOGIC ---
 
-      // Notify Auditees that audit has officially started
-      const auditees = users.filter(u => u.department === audit.department);
-      auditees.forEach(u => {
-        addNotification(
-            u.id,
-            "Audit Started",
-            `The audit for ${audit.department} is now IN PROGRESS. You may begin self-assessment.`
-        );
-      });
-    }
+  const initiateStartSingle = (audit: AuditSession) => {
+     setStartConfirmModal({ isOpen: true, type: 'SINGLE', audit });
   };
 
-  // Just opens the confirmation modal
+  const initiateStartAll = () => {
+    setStartConfirmModal({ isOpen: true, type: 'ALL', audit: null });
+  };
+
+  const executeStartAudit = () => {
+    if (startConfirmModal.type === 'SINGLE' && startConfirmModal.audit) {
+        // SINGLE START
+        const audit = startConfirmModal.audit;
+        onUpdateAudit({
+            ...audit,
+            status: AuditStatus.IN_PROGRESS
+        });
+
+        const auditees = users.filter(u => u.department === audit.department);
+        auditees.forEach(u => {
+            addNotification(
+                u.id,
+                "Audit Started",
+                `The audit for ${audit.department} is now IN PROGRESS. You may begin self-assessment.`
+            );
+        });
+        
+        alert(`✅ Audit untuk ${audit.department} telah diaktifkan (In Progress).`);
+
+    } else if (startConfirmModal.type === 'ALL') {
+        // BATCH START
+        const planned = audits.filter(a => a.status === AuditStatus.PLANNED);
+        
+        planned.forEach(audit => {
+             onUpdateAudit({ ...audit, status: AuditStatus.IN_PROGRESS });
+             
+             const auditees = users.filter(u => u.department === audit.department);
+             auditees.forEach(u => {
+                addNotification(
+                    u.id,
+                    "Audit Started",
+                    `The audit for ${audit.department} is now IN PROGRESS. You may begin self-assessment.`
+                );
+             });
+        });
+
+        alert(`✅ Berhasil memulai ${planned.length} audit sekaligus.`);
+    }
+
+    setStartConfirmModal({ isOpen: false, type: 'SINGLE', audit: null });
+  };
+
   const handleRescheduleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!rescheduleState.newDate || !rescheduleState.audit) return;
     setRescheduleConfirmOpen(true);
   };
 
-  // Executes logic AFTER confirmation
   const executeReschedule = () => {
     if (!rescheduleState.newDate || !rescheduleState.audit) return;
 
@@ -237,10 +312,8 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
     };
     onUpdateAudit(updatedAudit);
     
-    // --- RESCHEDULE NOTIFICATION LOGIC ---
     const dateStr = newDate.toLocaleDateString();
     
-    // 1. Notify Assigned Auditor
     if (updatedAudit.assignedAuditorId) {
       addNotification(
           updatedAudit.assignedAuditorId,
@@ -250,7 +323,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
       );
     }
 
-    // 2. Notify Auditee
     const auditees = users.filter(u => u.department === updatedAudit.department);
     auditees.forEach(u => {
         addNotification(
@@ -261,7 +333,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
         );
     });
 
-    // Close all modals
     setRescheduleConfirmOpen(false);
     setRescheduleState({ isOpen: false, audit: null, newDate: '' });
     
@@ -275,16 +346,17 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
     }
   };
 
-  const plannedAudits = audits.filter(a => a.status === AuditStatus.PLANNED);
-  const otherAudits = audits.filter(a => a.status !== AuditStatus.PLANNED);
+  // Group Pending and Planned together in the top list
+  const plannedAudits = audits.filter(a => a.status === AuditStatus.PLANNED || a.status === AuditStatus.PENDING_SCHEDULING);
+  // History contains everything else (In Progress, Submitted, Review, Completed)
+  const otherAudits = audits.filter(a => a.status !== AuditStatus.PLANNED && a.status !== AuditStatus.PENDING_SCHEDULING);
   
   const { daysInMonth, firstDayOfMonth, month, year } = getDaysInMonth(calendarDate);
   const monthName = calendarDate.toLocaleString('default', { month: 'long' });
 
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in pb-20">
-        {/* Sticky Header - Reduced Padding */}
-        <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm px-6 py-4 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in pb-20">
+        <div className="flex-none p-6 pb-4 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <CalendarDays className="text-blue-600" /> {t('nav.dashboard').replace('Dashboard', 'Audit Schedule')}
@@ -292,7 +364,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
             <p className="text-slate-500">Plan, schedule, and visualize audit timelines.</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* View Toggle */}
             <div className="bg-white border border-slate-300 rounded-lg p-1 flex items-center gap-1 shadow-sm mr-2">
                <button 
                   onClick={() => setScheduleViewMode('LIST')}
@@ -323,9 +394,8 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
           </div>
         </div>
 
-        <div className="px-6 py-6 space-y-8">
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 max-w-7xl mx-auto w-full">
           
-          {/* CALENDAR VIEW MODE */}
           {scheduleViewMode === 'CALENDAR' && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
@@ -333,27 +403,9 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                    <Calendar size={20} className="text-slate-500" /> {monthName} {year}
                 </h3>
                 <div className="flex items-center gap-2">
-                   <button 
-                     onClick={() => changeMonth(-1)} 
-                     className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all"
-                     title="Previous Month"
-                   >
-                      <ChevronLeft size={20} className="text-slate-600" />
-                   </button>
-                   <button 
-                     onClick={goToToday} 
-                     className="text-xs font-bold px-3 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors border border-blue-200"
-                     title="Jump to Today"
-                   >
-                      Today
-                   </button>
-                   <button 
-                     onClick={() => changeMonth(1)} 
-                     className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all"
-                     title="Next Month"
-                   >
-                      <ChevronRight size={20} className="text-slate-600" />
-                   </button>
+                   <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
+                   <button onClick={goToToday} className="text-xs font-bold px-3 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors border border-blue-200">Today</button>
+                   <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200 transition-all"><ChevronRight size={20} className="text-slate-600" /></button>
                 </div>
               </div>
 
@@ -364,12 +416,10 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
               </div>
 
               <div className="grid grid-cols-7 auto-rows-fr bg-slate-100 gap-px border-b border-slate-200">
-                 {/* Empty Slots for prev month */}
                  {[...Array(firstDayOfMonth)].map((_, i) => (
                     <div key={`empty-${i}`} className="bg-white min-h-[140px] p-2"></div>
                  ))}
                  
-                 {/* Days */}
                  {[...Array(daysInMonth)].map((_, i) => {
                     const day = i + 1;
                     const dayAudits = audits.filter(a => {
@@ -392,7 +442,7 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                          
                          <div className="space-y-1.5">
                             {dayAudits.map(audit => {
-                               const isOverdue = audit.status === AuditStatus.PLANNED && isPlanOverdue(audit.date);
+                               const isOverdue = (audit.status === AuditStatus.PLANNED || audit.status === AuditStatus.PENDING_SCHEDULING) && isPlanOverdue(audit.date);
                                return (
                                 <div 
                                   key={audit.id}
@@ -407,12 +457,13 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                                   }} 
                                   className={`text-[10px] px-2 py-1.5 rounded border cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] ${
                                     isOverdue ? 'bg-red-50 text-red-700 border-red-200 ring-1 ring-red-200' :
-                                    audit.status === AuditStatus.PLANNED ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100' :
-                                    audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' :
-                                    audit.status === AuditStatus.SUBMITTED ? 'bg-purple-50 text-purple-700 border-purple-100 hover:bg-purple-100' :
-                                    'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'
+                                    audit.status === AuditStatus.PENDING_SCHEDULING ? 'bg-slate-100 text-slate-700 border-slate-200 border-dashed' :
+                                    audit.status === AuditStatus.PLANNED ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                    audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                    audit.status === AuditStatus.SUBMITTED ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                    'bg-green-50 text-green-700 border-green-100'
                                   }`}
-                                  title={`${audit.department}\n${audit.standard}\nStatus: ${audit.status}${isOverdue ? ' (OVERDUE)' : ''}`}
+                                  title={`${audit.department}\n${audit.standard}\nStatus: ${audit.status}`}
                                 >
                                    <div className="font-bold truncate leading-tight flex items-center gap-1">
                                       {isOverdue && <AlertCircle size={8} className="text-red-600 shrink-0" />}
@@ -421,11 +472,12 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                                    <div className="opacity-80 text-[9px] truncate mt-0.5 flex items-center gap-1">
                                       <span className={`w-1.5 h-1.5 rounded-full ${
                                          isOverdue ? 'bg-red-500' :
+                                         audit.status === AuditStatus.PENDING_SCHEDULING ? 'bg-slate-400' :
                                          audit.status === AuditStatus.PLANNED ? 'bg-indigo-400' :
                                          audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-400' :
                                          audit.status === AuditStatus.SUBMITTED ? 'bg-purple-400' : 'bg-green-400'
                                       }`}></span>
-                                      {isOverdue ? 'OVERDUE' : audit.standard.split(' ')[0]}
+                                      {isOverdue ? 'OVERDUE' : audit.status}
                                    </div>
                                 </div>
                              );
@@ -434,8 +486,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                       </div>
                     );
                  })}
-                 
-                 {/* Fill remaining grid if needed */}
                  {[...Array(42 - (daysInMonth + firstDayOfMonth))].map((_, i) => (
                      <div key={`empty-end-${i}`} className="bg-slate-50/30 min-h-[140px]"></div>
                  ))}
@@ -449,10 +499,23 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
               {/* Upcoming / Planned */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Clock size={18} className="text-blue-500" /> Upcoming (Planned)
-                  </h3>
-                  <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{plannedAudits.length}</span>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Clock size={18} className="text-blue-500" /> Upcoming / Pending
+                    </h3>
+                    <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{plannedAudits.length}</span>
+                  </div>
+                  
+                  {/* START ALL BUTTON - Only valid for Confirmed (PLANNED) audits */}
+                  {canStartAudit && plannedAudits.some(a => a.status === AuditStatus.PLANNED) && (
+                    <button 
+                       onClick={initiateStartAll}
+                       className="text-xs font-bold bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 shadow-sm"
+                       title="Start All Planned Audits"
+                    >
+                       <Play size={14} fill="currentColor" /> Start All Planned
+                    </button>
+                  )}
                 </div>
                 {plannedAudits.length === 0 ? (
                   <div className="p-12 text-center flex flex-col items-center text-slate-400">
@@ -465,7 +528,7 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                       <tr>
                         <th className="px-6 py-3">Date</th>
                         <th className="px-6 py-3">Department</th>
-                        <th className="px-6 py-3">Standard</th>
+                        <th className="px-6 py-3">Status</th>
                         <th className="px-6 py-3">Auditor</th>
                         <th className="px-6 py-3 text-right">Action</th>
                       </tr>
@@ -485,8 +548,13 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                           </td>
                           <td className="px-6 py-3 font-medium">{audit.department}</td>
                           <td className="px-6 py-3">
-                            <span className="bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200 text-slate-600">
-                              {audit.standard.split(' ')[0]}
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                              audit.status === AuditStatus.PENDING_SCHEDULING 
+                                ? 'bg-slate-100 border-slate-300 text-slate-600 border-dashed'
+                                : 'bg-indigo-50 border-indigo-100 text-indigo-700'
+                            }`}>
+                              {audit.status === AuditStatus.PENDING_SCHEDULING ? <CalendarClock size={12}/> : <CheckCircle size={12}/>}
+                              {audit.status === AuditStatus.PENDING_SCHEDULING ? 'Confirm Wait' : 'Planned'}
                             </span>
                           </td>
                           <td className="px-6 py-3 flex items-center gap-2">
@@ -497,15 +565,18 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                           </td>
                           <td className="px-6 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <button 
-                                onClick={() => handleStartAudit(audit)}
-                                className="flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-1.5 rounded-md transition-colors mr-2 border border-green-200 shadow-sm"
-                                title="Start & Confirm Audit Now"
-                              >
-                                <PlayCircle size={14} /> <span className="text-xs font-bold">Start</span>
-                              </button>
                               
-                              {/* RESCHEDULE BUTTON - Highlighted if Overdue */}
+                              {/* SINGLE START BUTTON - Only for PLANNED */}
+                              {canStartAudit && audit.status === AuditStatus.PLANNED && (
+                                <button 
+                                    onClick={() => initiateStartSingle(audit)}
+                                    className="flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-1.5 rounded-md transition-colors mr-2 border border-green-200 shadow-sm"
+                                    title="Start & Confirm Audit Now"
+                                >
+                                    <PlayCircle size={14} /> <span className="text-xs font-bold">Start</span>
+                                </button>
+                              )}
+                              
                               {canManageSchedule && (
                                 <button 
                                     onClick={() => setRescheduleState({
@@ -518,7 +589,7 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                                             ? 'bg-red-100 text-red-600 border-red-200 hover:bg-red-200 hover:text-red-800 animate-pulse' 
                                             : 'text-blue-600 hover:bg-blue-50 border-transparent hover:border-blue-100'
                                     }`}
-                                    title={isOverdue ? "Overdue! Click to Reschedule" : "Reschedule"}
+                                    title="Reschedule"
                                 >
                                     <Calendar size={16} />
                                 </button>
@@ -576,14 +647,27 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                             </td>
                             <td className="px-6 py-3 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                 <span className="text-xs text-slate-400 hidden lg:inline italic">View in Reports</span>
-                                 <button 
-                                   onClick={() => setDeleteScheduleModal({ open: true, auditId: audit.id, auditName: audit.department })}
-                                   className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition-colors"
-                                   title="Delete Audit Record"
-                                 >
-                                   <Trash2 size={16} />
-                                 </button>
+                                 
+                                 {canViewReports && (
+                                    <button 
+                                      onClick={() => onViewReport(audit)}
+                                      className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1.5 rounded flex items-center gap-1 transition-colors mr-2 border border-transparent hover:border-blue-100"
+                                      title="Open Audit Report"
+                                    >
+                                      <PieChart size={14} /> View Report
+                                    </button>
+                                 )}
+
+                                 {/* DELETE BUTTON - STRICTLY RESTRICTED TO SUPER_ADMIN & ADMIN */}
+                                 {canDeleteHistory && (
+                                    <button 
+                                      onClick={() => setDeleteScheduleModal({ open: true, auditId: audit.id, auditName: audit.department })}
+                                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition-colors"
+                                      title="Delete Audit Record"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                 )}
                               </div>
                             </td>
                           </tr>
@@ -607,7 +691,7 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                   <X size={20} />
                 </button>
               </div>
-              <form onSubmit={handleSaveSchedule} className="p-6 space-y-4">
+              <form onSubmit={handleInitiateSchedule} className="p-6 space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Standard</label>
                   <select 
@@ -624,7 +708,15 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department (Auditee)</label>
                   <select 
                     value={scheduleForm.department}
-                    onChange={e => setScheduleForm({...scheduleForm, department: e.target.value, auditorId: ''})}
+                    onChange={e => {
+                        const dept = e.target.value;
+                        setScheduleForm(prev => ({
+                            ...prev, 
+                            department: dept, 
+                            auditorId: '',
+                            auditName: dept ? `Audit ${dept} - ${settings.auditPeriod}` : ''
+                        }));
+                    }}
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
                     <option value="">-- Select Unit --</option>
@@ -632,6 +724,16 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                       <option key={u.id} value={u.name}>{u.name}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Audit Name (Auto-filled)</label>
+                  <input 
+                    type="text"
+                    value={scheduleForm.auditName}
+                    onChange={e => setScheduleForm({...scheduleForm, auditName: e.target.value})}
+                    placeholder={`e.g. Audit Unit - ${settings.auditPeriod}`}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assigned Auditor</label>
@@ -652,11 +754,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                       <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
                     ))}
                   </select>
-                  {scheduleForm.department && (
-                    <p className="text-[10px] text-amber-600 mt-1 italic flex items-center gap-1 bg-amber-50 p-1 rounded">
-                      <AlertTriangle size={10} /> Auditors from <strong>{scheduleForm.department}</strong> are excluded.
-                    </p>
-                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Scheduled Date</label>
@@ -668,14 +765,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                   />
                 </div>
                 
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
-                   <p className="font-bold mb-1">Estimated Deadlines:</p>
-                   <ul className="list-disc pl-4 space-y-0.5">
-                      <li>Auditee (14 Days): {new Date(new Date(scheduleForm.date).getTime() + 14*24*60*60*1000).toLocaleDateString()}</li>
-                      <li>Auditor (21 Days): {new Date(new Date(scheduleForm.date).getTime() + 21*24*60*60*1000).toLocaleDateString()}</li>
-                   </ul>
-                </div>
-
                 <div className="pt-2 flex gap-3">
                   <button type="button" onClick={() => setIsScheduleModalOpen(false)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">Cancel</button>
                   <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md">Confirm Schedule</button>
@@ -685,7 +774,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
           </div>
         )}
 
-        {/* Reschedule Modal */}
         {rescheduleState.isOpen && rescheduleState.audit && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in">
@@ -695,17 +783,11 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                   <X size={20} />
                 </button>
               </div>
-              {/* CHANGE: Updated Submit Handler to trigger Confirmation */}
               <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4">
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 mb-2">
                    <p className="font-bold mb-1">Current Schedule:</p>
                    <p>{rescheduleState.audit.department}</p>
                    <p>{new Date(rescheduleState.audit.date).toLocaleDateString()}</p>
-                   {isPlanOverdue(rescheduleState.audit.date) && (
-                     <p className="text-red-600 font-bold mt-1 uppercase flex items-center gap-1">
-                        <AlertTriangle size={12} /> Status: Overdue
-                     </p>
-                   )}
                 </div>
                 
                 <div>
@@ -728,7 +810,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
           </div>
         )}
 
-        {/* RESCHEDULE CONFIRMATION MODAL */}
         {rescheduleConfirmOpen && (
            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
@@ -741,9 +822,6 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
                   Apakah Anda yakin ingin mengubah jadwal audit untuk unit 
                   <span className="font-bold text-slate-700 block mt-1">{rescheduleState.audit?.department}</span>
                   menjadi tanggal <span className="font-bold text-blue-600">{new Date(rescheduleState.newDate).toLocaleDateString()}</span>?
-                </p>
-                <p className="text-xs text-slate-400 mt-2">
-                  Notifikasi perubahan akan dikirim ke Auditor dan Auditee terkait.
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -764,7 +842,75 @@ const AuditSchedule: FC<AuditScheduleProps> = ({ audits, onCreateAudit, onUpdate
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
+        {createConfirmOpen && (
+           <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
+                <Calendar size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Konfirmasi Jadwal Baru</h3>
+                <p className="text-sm text-slate-500">
+                  Anda akan menjadwalkan audit untuk:
+                  <span className="font-bold text-slate-700 block mt-1">{scheduleForm.department}</span>
+                </p>
+                <div className="mt-2 bg-slate-50 p-2 rounded text-xs font-medium text-slate-600 border border-slate-100">
+                   Status Awal: <span className="text-slate-800 font-bold">Pending Schedule</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                   Kepala Unit harus menyetujui jadwal ini agar audit menjadi Planned/Aktif.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setCreateConfirmOpen(false)}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={executeSaveSchedule}
+                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 transition-colors shadow-lg shadow-green-900/20"
+                >
+                  Ya, Jadwalkan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {startConfirmModal.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
+                  <PlayCircle size={24} />
+               </div>
+               <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-2">
+                    {startConfirmModal.type === 'ALL' ? 'Mulai Semua Audit?' : 'Mulai Audit?'}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                     Status audit akan berubah menjadi <strong>IN_PROGRESS</strong>.
+                  </p>
+               </div>
+               <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => setStartConfirmModal({ isOpen: false, type: 'SINGLE', audit: null })}
+                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={executeStartAudit}
+                    className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 transition-colors shadow-lg shadow-green-900/20"
+                  >
+                    Ya, Mulai
+                  </button>
+               </div>
+            </div>
+          </div>
+        )}
+
         {deleteScheduleModal.open && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">

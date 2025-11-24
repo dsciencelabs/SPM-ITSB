@@ -1,5 +1,4 @@
-
-import { useState, FC, useRef, useEffect } from 'react';
+import { useState, FC, useRef, useEffect, FormEvent, ChangeEvent } from 'react';
 import { 
   LayoutDashboard, 
   FilePlus, 
@@ -17,7 +16,14 @@ import {
   Bell,
   Check,
   Trash2,
-  X
+  X,
+  Key,
+  User,
+  Save,
+  Loader2,
+  Camera,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types';
 import { useLanguage } from '../LanguageContext';
@@ -34,7 +40,7 @@ interface SidebarProps {
 
 const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, toggleSidebar }) => {
   const { t, language, setLanguage } = useLanguage();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateUser } = useAuth();
   const { settings } = useSettings();
   const { notifications, markAsRead, markAllAsRead, clearAll } = useNotification();
   
@@ -42,6 +48,23 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
   const [isHovered, setIsHovered] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  // Profile / Change Password Modal State
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [passForm, setPassForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  
+  // Password Confirmation State
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
+  // Avatar Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [tempAvatar, setTempAvatar] = useState<string | null>(null);
+  const [showAvatarConfirm, setShowAvatarConfirm] = useState(false);
 
   // Filter notifications for current user
   const myNotifications = notifications.filter(n => n.userId === currentUser?.id);
@@ -58,11 +81,83 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset temp avatar when modal opens/closes
+  useEffect(() => {
+    if (isProfileOpen && currentUser) {
+      setTempAvatar(null);
+    }
+  }, [isProfileOpen, currentUser]);
+
   const handleNotificationClick = (noteId: string) => {
     markAsRead(noteId);
     // Smart navigation: Redirect to Audit Execution as it's the main action area
     setCurrentView('AUDIT_EXECUTION');
     setShowNotifications(false);
+  };
+
+  const handlePasswordValidation = (e: FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    if (passForm.oldPassword !== currentUser.password) {
+      alert("Password Lama salah.");
+      return;
+    }
+
+    if (passForm.newPassword !== passForm.confirmPassword) {
+      alert("Konfirmasi password baru tidak cocok.");
+      return;
+    }
+
+    if (passForm.newPassword.length < 3) {
+       alert("Password terlalu pendek.");
+       return;
+    }
+
+    // Show Confirmation Modal instead of saving immediately
+    setShowPasswordConfirm(true);
+  };
+
+  const executePasswordChange = () => {
+     if (!currentUser) return;
+     
+     setIsSavingProfile(true);
+     setShowPasswordConfirm(false); // Close confirm modal
+
+     // Simulate API delay
+     setTimeout(() => {
+        updateUser({ ...currentUser, password: passForm.newPassword });
+        setIsSavingProfile(false);
+        setIsProfileOpen(false);
+        setPassForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        alert("Password berhasil diperbarui!");
+     }, 800);
+  };
+
+  // Avatar Handlers
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) { // 1MB limit
+         alert("Ukuran file terlalu besar (Maks 1MB)");
+         return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const executeAvatarSave = () => {
+    if (!currentUser || !tempAvatar) return;
+
+    updateUser({ ...currentUser, avatarUrl: tempAvatar });
+    setShowAvatarConfirm(false);
+    setTempAvatar(null); // Reset temp to hide the save button
+    alert("Foto profil berhasil diperbarui!");
   };
 
   // Determine if the sidebar is visually expanded
@@ -112,8 +207,8 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
       case UserRole.AUDITOR:
         return [
           ...base,
-          { id: 'AUDIT_EXECUTION', label: 'My Assignments', icon: ClipboardList },
-          { id: 'REPORT', label: 'My Reports', icon: PieChart },
+          { id: 'AUDIT_EXECUTION', label: 'My Assignments (Active)', icon: ClipboardList },
+          { id: 'REPORT', label: 'My Reports (History)', icon: PieChart },
         ];
       
       case UserRole.DEPT_HEAD:
@@ -168,11 +263,13 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
         {isExpanded && (
           <div className="overflow-hidden animate-fade-in relative w-full">
             <div className="flex justify-between items-start">
-                <div className="flex-1 overflow-hidden">
-                    <h1 className="font-bold text-base tracking-tight truncate leading-tight" title={settings.appName}>
+                <div className="flex-1 overflow-hidden group cursor-pointer" onClick={() => setIsProfileOpen(true)} title="Klik untuk edit profil">
+                    <h1 className="font-bold text-base tracking-tight truncate leading-tight group-hover:text-blue-400 transition-colors" title={settings.appName}>
                     {settings.appName}
                     </h1>
-                    <p className="text-[10px] text-slate-400 truncate">{currentUser?.role || 'Guest'}</p>
+                    <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                       {currentUser?.role || 'Guest'} <Settings size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </p>
                 </div>
                 
                 {/* Notification Bell */}
@@ -294,6 +391,29 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
       </nav>
 
       <div className={`border-t border-slate-700 transition-all duration-300 ${!isExpanded ? 'p-3 space-y-3' : 'p-4 space-y-4'}`}>
+        
+        {/* User Profile / Change Password Quick Access */}
+        {isExpanded && (
+            <button 
+                onClick={() => setIsProfileOpen(true)}
+                className="w-full flex items-center gap-3 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700/50 group"
+            >
+                <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-200 group-hover:bg-blue-600 group-hover:text-white transition-colors overflow-hidden">
+                    {currentUser?.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      currentUser?.name.charAt(0)
+                    )}
+                </div>
+                <div className="text-left overflow-hidden flex-1">
+                    <p className="text-xs font-bold text-slate-200 truncate">{currentUser?.name}</p>
+                    <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Key size={10} /> Ubah Password
+                    </p>
+                </div>
+            </button>
+        )}
+
         {/* Language Switcher */}
         <div className={`bg-slate-800 rounded-lg flex transition-all ${!isExpanded ? 'flex-col p-1 gap-1' : 'p-1'}`}>
           <button 
@@ -324,6 +444,191 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
           )}
         </button>
       </div>
+
+      {/* PROFILE / CHANGE PASSWORD MODAL */}
+      {isProfileOpen && currentUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-slate-800">
+            {/* Modal Header & Avatar Section */}
+            <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-b border-slate-100 p-6 flex items-start justify-between relative">
+               <div className="flex items-center gap-4">
+                  {/* Avatar Upload */}
+                  <div className="relative group">
+                    <div className="w-16 h-16 rounded-full bg-white border-2 border-white shadow-md flex items-center justify-center text-blue-600 overflow-hidden">
+                       {(tempAvatar || currentUser.avatarUrl) ? (
+                         <img src={tempAvatar || currentUser.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                       ) : (
+                         <User size={32} />
+                       )}
+                    </div>
+                    {/* Hover Overlay for Upload */}
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
+                      title="Ganti Foto"
+                    >
+                       <Camera size={20} />
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleFileChange}
+                    />
+                  </div>
+                  
+                  <div>
+                    <h3 className="font-bold text-lg">{currentUser.name}</h3>
+                    <p className="text-xs text-slate-500">@{currentUser.username} • <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">{currentUser.role}</span></p>
+                    <p className="text-xs text-slate-400 mt-1">{currentUser.department || 'Non-Departmental'}</p>
+                    
+                    {/* Show "Save Avatar" button if temp avatar exists */}
+                    {tempAvatar && (
+                       <button 
+                         onClick={() => setShowAvatarConfirm(true)}
+                         className="mt-2 text-[10px] bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors shadow-sm"
+                       >
+                         <Save size={10} /> Simpan Foto
+                       </button>
+                    )}
+                  </div>
+               </div>
+               <button onClick={() => setIsProfileOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <X size={20} />
+               </button>
+            </div>
+            
+            <form onSubmit={handlePasswordValidation} className="p-6 space-y-4">
+               
+               <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-2">
+                     <Key size={12} /> Ganti Password
+                  </h4>
+                  
+                  <div>
+                     <label className="block text-xs font-medium text-slate-600 mb-1">Password Lama</label>
+                     <input 
+                        type="password" 
+                        required 
+                        value={passForm.oldPassword}
+                        onChange={(e) => setPassForm({...passForm, oldPassword: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="••••••"
+                     />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-medium text-slate-600 mb-1">Password Baru</label>
+                     <input 
+                        type="password" 
+                        required 
+                        value={passForm.newPassword}
+                        onChange={(e) => setPassForm({...passForm, newPassword: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="Minimal 3 karakter"
+                     />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-medium text-slate-600 mb-1">Konfirmasi Password Baru</label>
+                     <input 
+                        type="password" 
+                        required 
+                        value={passForm.confirmPassword}
+                        onChange={(e) => setPassForm({...passForm, confirmPassword: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="Ulangi password baru"
+                     />
+                  </div>
+               </div>
+
+               <div className="pt-4 flex gap-3">
+                  <button 
+                     type="button" 
+                     onClick={() => setIsProfileOpen(false)}
+                     className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+                  >
+                     Batal
+                  </button>
+                  <button 
+                     type="submit" 
+                     disabled={isSavingProfile}
+                     className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                     {isSavingProfile ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                     Simpan Password
+                  </button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL - PASSWORD */}
+      {showPasswordConfirm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
+                 <Key size={24} />
+              </div>
+              <div>
+                 <h3 className="text-lg font-bold text-slate-900 mb-2">Apakah Anda Yakin?</h3>
+                 <p className="text-sm text-slate-500">
+                    Anda akan mengubah password akun Anda. Pastikan Anda mengingat password baru ini.
+                 </p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button 
+                   onClick={() => setShowPasswordConfirm(false)}
+                   className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                 >
+                   Batal
+                 </button>
+                 <button 
+                   onClick={executePasswordChange}
+                   className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+                 >
+                   Ya, Simpan
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL - AVATAR */}
+      {showAvatarConfirm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
+                 <ImageIcon size={24} />
+              </div>
+              <div>
+                 <h3 className="text-lg font-bold text-slate-900 mb-2">Ganti Foto Profil?</h3>
+                 <p className="text-sm text-slate-500">
+                    Apakah Anda yakin ingin memperbarui foto profil Anda dengan gambar yang baru dipilih?
+                 </p>
+                 {tempAvatar && (
+                    <div className="mt-3 flex justify-center">
+                       <img src={tempAvatar} alt="Preview" className="w-16 h-16 rounded-full border-2 border-slate-200 object-cover" />
+                    </div>
+                 )}
+              </div>
+              <div className="flex gap-3 pt-2">
+                 <button 
+                   onClick={() => setShowAvatarConfirm(false)}
+                   className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                 >
+                   Batal
+                 </button>
+                 <button 
+                   onClick={executeAvatarSave}
+                   className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 transition-colors shadow-lg shadow-green-900/20"
+                 >
+                   Ya, Ganti
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

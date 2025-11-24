@@ -63,9 +63,9 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
   const canCreateAudit = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
 
   return (
-    <div className="animate-fade-in">
-      {/* Sticky Header - Reduced Padding */}
-      <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50">
+    <div className="flex flex-col h-full animate-fade-in bg-slate-50">
+      {/* Fixed Header */}
+      <div className="flex-none bg-slate-50 border-b border-slate-200/50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -92,97 +92,99 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
       </div>
 
       {/* Scrollable Content */}
-      <div className="max-w-7xl mx-auto px-8 py-6">
-        {/* Welcome Banner for Auditee/Dept Head */}
-        {(currentUser?.role === UserRole.AUDITEE || currentUser?.role === UserRole.DEPT_HEAD) && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-amber-800">
-            <Building2 size={24} />
-            <div>
-              <p className="font-bold">Area Unit: {currentUser.department}</p>
-              <p className="text-sm">Anda hanya dapat mengakses data audit untuk unit kerja Anda. Silakan lengkapi bukti dan rencana tindak lanjut pada audit yang aktif.</p>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-8 py-6 pb-20">
+          {/* Welcome Banner for Auditee/Dept Head */}
+          {(currentUser?.role === UserRole.AUDITEE || currentUser?.role === UserRole.DEPT_HEAD) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-amber-800">
+              <Building2 size={24} />
+              <div>
+                <p className="font-bold">Area Unit: {currentUser.department}</p>
+                <p className="text-sm">Anda hanya dapat mengakses data audit untuk unit kerja Anda. Silakan lengkapi bukti dan rencana tindak lanjut pada audit yang aktif.</p>
+              </div>
             </div>
-          </div>
-        )}
-        
-        {/* Welcome Banner for Auditor/Lead */}
-        {(currentUser?.role === UserRole.AUDITOR || currentUser?.role === UserRole.AUDITOR_LEAD) && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-green-800">
-            <UserCheck size={24} />
-            <div>
-              <p className="font-bold">{currentUser.role === UserRole.AUDITOR_LEAD ? 'Lead Auditor Oversight' : 'Penugasan Auditor'}</p>
-              <p className="text-sm">
-                {currentUser.role === UserRole.AUDITOR_LEAD 
-                  ? 'Anda memiliki akses untuk memantau seluruh audit yang berjalan serta melakukan verifikasi.'
-                  : 'Menampilkan daftar audit yang ditugaskan kepada Anda. Silakan lakukan penilaian kepatuhan dan berikan catatan.'}
-              </p>
+          )}
+          
+          {/* Welcome Banner for Auditor/Lead */}
+          {(currentUser?.role === UserRole.AUDITOR || currentUser?.role === UserRole.AUDITOR_LEAD) && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-green-800">
+              <UserCheck size={24} />
+              <div>
+                <p className="font-bold">{currentUser.role === UserRole.AUDITOR_LEAD ? 'Lead Auditor Oversight' : 'Penugasan Auditor'}</p>
+                <p className="text-sm">
+                  {currentUser.role === UserRole.AUDITOR_LEAD 
+                    ? 'Anda memiliki akses untuk memantau seluruh audit yang berjalan serta melakukan verifikasi.'
+                    : 'Menampilkan daftar audit yang ditugaskan kepada Anda. Silakan lakukan penilaian kepatuhan dan berikan catatan.'}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Stats Grid - Updated to 5 columns to accommodate Planned */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <StatCard title={t('dash.total')} value={total} icon={BarChart3} color="bg-blue-500" />
-          <StatCard title={t('dash.inProgress')} value={inProgress} icon={Clock} color="bg-amber-500" />
-          <StatCard title="Verifikasi Auditor" value={submitted} icon={Send} color="bg-purple-500" />
-          <StatCard title="Review DeptHead" value={reviewDept} icon={ShieldCheck} color="bg-indigo-500" />
-          <StatCard title={t('dash.completed')} value={completed} icon={CheckCircle2} color="bg-green-500" />
-        </div>
-
-        {/* Recent History Table - Full Width */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-100">
-            <h3 className="font-semibold text-slate-800">{t('dash.recentHistory')}</h3>
+          {/* Stats Grid - Updated to 5 columns to accommodate Planned */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+            <StatCard title={t('dash.total')} value={total} icon={BarChart3} color="bg-blue-500" />
+            <StatCard title={t('dash.inProgress')} value={inProgress} icon={Clock} color="bg-amber-500" />
+            <StatCard title="Verifikasi Auditor" value={submitted} icon={Send} color="bg-purple-500" />
+            <StatCard title="Review DeptHead" value={reviewDept} icon={ShieldCheck} color="bg-indigo-500" />
+            <StatCard title={t('dash.completed')} value={completed} icon={CheckCircle2} color="bg-green-500" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="px-6 py-3 font-medium">{t('dash.th.dept')}</th>
-                  <th className="px-6 py-3 font-medium">{t('dash.th.std')}</th>
-                  <th className="px-6 py-3 font-medium">{t('dash.th.status')}</th>
-                  <th className="px-6 py-3 font-medium">{t('dash.th.date')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredAudits.length === 0 ? (
+
+          {/* Recent History Table - Full Width */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-800">{t('dash.recentHistory')}</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                      {t('dash.empty')}
-                    </td>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.dept')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.std')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.status')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.date')}</th>
                   </tr>
-                ) : (
-                  filteredAudits.map((audit) => (
-                    <tr 
-                      key={audit.id} 
-                      className="hover:bg-slate-50 transition-colors cursor-pointer"
-                      onClick={() => onViewAudit(audit)}
-                    >
-                      <td className="px-6 py-4 font-medium text-slate-900">{audit.department}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                          {audit.standard.split(' ')[0]}
-                        </span>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAudits.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        {t('dash.empty')}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' : 
-                          audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'bg-indigo-100 text-indigo-800' :
-                          audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-800' :
-                          audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-800' : 
-                          audit.status === AuditStatus.PLANNED ? 'bg-slate-100 text-slate-800' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>
-                          {audit.status === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : 
-                           audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' :
-                           audit.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500">{new Date(audit.date).toLocaleDateString('id-ID')}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredAudits.map((audit) => (
+                      <tr 
+                        key={audit.id} 
+                        className="hover:bg-slate-50 transition-colors cursor-pointer"
+                        onClick={() => onViewAudit(audit)}
+                      >
+                        <td className="px-6 py-4 font-medium text-slate-900">{audit.department}</td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                            {audit.standard}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' : 
+                            audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'bg-indigo-100 text-indigo-800' :
+                            audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-800' :
+                            audit.status === AuditStatus.IN_PROGRESS ? 'bg-amber-100 text-amber-800' : 
+                            audit.status === AuditStatus.PLANNED ? 'bg-slate-100 text-slate-800' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {audit.status === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : 
+                             audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' :
+                             audit.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-slate-500">{new Date(audit.date).toLocaleDateString('id-ID')}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

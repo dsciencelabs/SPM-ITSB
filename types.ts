@@ -7,7 +7,8 @@ export enum AuditStandard {
 }
 
 export enum AuditStatus {
-  PLANNED = 'Planned',
+  PENDING_SCHEDULING = 'Pending Schedule', // New: Waiting for DeptHead to confirm date/auditor
+  PLANNED = 'Planned', // Confirmed by DeptHead, waiting for start date
   IN_PROGRESS = 'In Progress',
   SUBMITTED = 'Submitted', // Auditee submitted, waiting for Auditor verification
   REVIEW_DEPT_HEAD = 'Review DeptHead', // Auditor verified, waiting for DeptHead approval
@@ -31,6 +32,7 @@ export interface User {
   role: UserRole;
   department?: string; // For Auditee
   status?: 'Active' | 'Inactive'; // Added for management
+  avatarUrl?: string; // Base64 string for profile picture
 }
 
 export interface AuditQuestion {

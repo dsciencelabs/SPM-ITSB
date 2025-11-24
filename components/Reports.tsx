@@ -232,9 +232,9 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
       currentUser?.role === UserRole.AUDITOR;
 
     return (
-      <div className="animate-fade-in relative">
-        {/* Sticky Header - Reduced Padding */}
-        <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50">
+      <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
+        {/* Header - Fixed */}
+        <div className="flex-none bg-slate-50 border-b border-slate-200/50">
           <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-end gap-4">
             <div>
                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -282,102 +282,104 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
         </div>
 
         {/* Scrollable Content */}
-        <div className="max-w-7xl mx-auto px-8 py-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
-                <tr>
-                  <th className="px-6 py-4">{t('dash.th.dept')}</th>
-                  <th className="px-6 py-4">{t('dash.th.std')}</th>
-                  <th className="px-6 py-4">{t('dash.th.date')}</th>
-                  <th className="px-6 py-4">{t('exec.progress')}</th>
-                  <th className="px-6 py-4">{t('dash.th.status')}</th>
-                  <th className="px-6 py-4 text-right">{t('mgmt.th.action')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredAudits.length === 0 ? (
+        <div className="flex-1 overflow-y-auto p-6 pb-20">
+          <div className="max-w-7xl mx-auto">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                      {t('repo.empty')}
-                    </td>
+                    <th className="px-6 py-4">{t('dash.th.dept')}</th>
+                    <th className="px-6 py-4">{t('dash.th.std')}</th>
+                    <th className="px-6 py-4">{t('dash.th.date')}</th>
+                    <th className="px-6 py-4">{t('exec.progress')}</th>
+                    <th className="px-6 py-4">{t('dash.th.status')}</th>
+                    <th className="px-6 py-4 text-right">{t('mgmt.th.action')}</th>
                   </tr>
-                ) : (
-                  filteredAudits.map((a) => {
-                    const total = a.questions.length;
-                    const answered = a.questions.filter(q => q.compliance !== null).length;
-                    const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAudits.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                        {t('repo.empty')}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAudits.map((a) => {
+                      const total = a.questions.length;
+                      const answered = a.questions.filter(q => q.compliance !== null).length;
+                      const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
 
-                    return (
-                      <tr key={a.id} className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-6 py-4 font-medium text-slate-900">
-                          {a.department}
-                          <div className="text-xs text-slate-500 font-normal mt-0.5">{a.name}</div>
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-xs">
-                            {a.standard.split(' ')[0]}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {new Date(a.date).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 bg-slate-100 rounded-full h-1.5">
-                              <div 
-                                className={`h-1.5 rounded-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
-                                style={{ width: `${progress}%` }}
-                              ></div>
+                      return (
+                        <tr key={a.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="px-6 py-4 font-medium text-slate-900">
+                            {a.department}
+                            <div className="text-xs text-slate-500 font-normal mt-0.5">{a.name}</div>
+                          </td>
+                          <td className="px-6 py-4 text-slate-600">
+                            <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-xs">
+                              {a.standard}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-600">
+                            {new Date(a.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 bg-slate-100 rounded-full h-1.5">
+                                <div 
+                                  className={`h-1.5 rounded-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                                  style={{ width: `${progress}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-slate-500">{progress}%</span>
                             </div>
-                            <span className="text-xs text-slate-500">{progress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                           {a.status === AuditStatus.COMPLETED ? (
-                             <span className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 w-fit">
-                               <CheckCircle size={12} /> {t('repo.completed')}
-                             </span>
-                           ) : a.status === AuditStatus.SUBMITTED ? (
-                             <span className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100 w-fit">
-                               <Send size={12} /> Submitted
-                             </span>
-                           ) : a.status === AuditStatus.REVIEW_DEPT_HEAD ? (
-                             <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 w-fit">
-                               <ShieldCheck size={12} /> Review Ka. Unit
-                             </span>
-                           ) : (
-                             <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
-                               <Clock size={12} /> {t('repo.progress')}
-                             </span>
-                           )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            {canReopen && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.SUBMITTED || a.status === AuditStatus.REVIEW_DEPT_HEAD) && (
-                              <button
-                                onClick={(e) => triggerReopen(a, e)}
-                                className="text-amber-600 hover:text-amber-800 text-sm font-medium bg-amber-50 hover:bg-amber-100 p-1.5 rounded transition-colors border border-amber-200"
-                                title={t('report.btn.reopen') + " (Admin Only)"}
-                              >
-                                <RotateCcw size={16} />
-                              </button>
-                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                             {a.status === AuditStatus.COMPLETED ? (
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 w-fit">
+                                 <CheckCircle size={12} /> {t('repo.completed')}
+                               </span>
+                             ) : a.status === AuditStatus.SUBMITTED ? (
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100 w-fit">
+                                 <Send size={12} /> Submitted
+                               </span>
+                             ) : a.status === AuditStatus.REVIEW_DEPT_HEAD ? (
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 w-fit">
+                                 <ShieldCheck size={12} /> Review Ka. Unit
+                               </span>
+                             ) : (
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
+                                 <Clock size={12} /> {t('repo.progress')}
+                               </span>
+                             )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              {canReopen && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.SUBMITTED || a.status === AuditStatus.REVIEW_DEPT_HEAD) && (
+                                <button
+                                  onClick={(e) => triggerReopen(a, e)}
+                                  className="text-amber-600 hover:text-amber-800 text-sm font-medium bg-amber-50 hover:bg-amber-100 p-1.5 rounded transition-colors border border-amber-200"
+                                  title={t('report.btn.reopen') + " (Admin Only)"}
+                                >
+                                  <RotateCcw size={16} />
+                                </button>
+                              )}
 
-                            <button 
-                              onClick={() => onSelectAudit(a)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline flex items-center gap-1 justify-end"
-                            >
-                              {t('repo.btn.view')} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1"/>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                              <button 
+                                onClick={() => onSelectAudit(a)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline flex items-center gap-1 justify-end"
+                              >
+                                {t('repo.btn.view')} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1"/>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -562,19 +564,19 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto animate-fade-in relative">
-      {/* Back Button */}
-      <div className="mb-4">
-        <button 
-          onClick={onBackToList}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
-        >
-          <ChevronLeft size={16} /> {t('repo.all')}
-        </button>
-      </div>
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in relative">
+      {/* Fixed Header */}
+      <div className="flex-none bg-slate-50 border-b border-slate-200/50 pt-2 px-6 pb-4">
+        {/* Back Button */}
+        <div className="mb-4">
+          <button 
+            onClick={onBackToList}
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors"
+          >
+            <ChevronLeft size={16} /> {t('repo.all')}
+          </button>
+        </div>
 
-      {/* Sticky Header for Detail View - Reduced Padding */}
-      <div className="sticky top-0 z-30 -mx-6 px-6 pb-4 pt-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/50 mb-8">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-2xl shadow-lg shadow-blue-500/30 flex-shrink-0">
@@ -584,7 +586,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{t('report.title')}</h2>
                <div className="flex items-center gap-2 text-slate-500 mt-1 font-medium text-sm">
                   <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs uppercase tracking-wide">
-                    {audit.standard.split(' ')[0]}
+                    {audit.standard}
                   </span>
                   <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                   <span>{audit.department}</span>
@@ -628,253 +630,256 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Summary Cards */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.compliant')}</p>
-              <p className="text-3xl font-bold text-green-600">{compliantCount}</p>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-8 max-w-6xl mx-auto w-full pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Summary Cards */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.compliant')}</p>
+                <p className="text-3xl font-bold text-green-600">{compliantCount}</p>
+              </div>
+              <div className="bg-green-50 p-3 rounded-full text-green-600"><CheckCircle size={24} /></div>
             </div>
-            <div className="bg-green-50 p-3 rounded-full text-green-600"><CheckCircle size={24} /></div>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.nc')}</p>
+                <p className="text-3xl font-bold text-red-600">{nonCompliantCount}</p>
+              </div>
+              <div className="bg-red-50 p-3 rounded-full text-red-600"><XCircle size={24} /></div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.ob')}</p>
+                <p className="text-3xl font-bold text-amber-600">{observationCount}</p>
+              </div>
+              <div className="bg-amber-50 p-3 rounded-full text-amber-600"><AlertCircle size={24} /></div>
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.nc')}</p>
-              <p className="text-3xl font-bold text-red-600">{nonCompliantCount}</p>
-            </div>
-            <div className="bg-red-50 p-3 rounded-full text-red-600"><XCircle size={24} /></div>
-          </div>
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500 font-medium mb-1">{t('report.ob')}</p>
-              <p className="text-3xl font-bold text-amber-600">{observationCount}</p>
-            </div>
-            <div className="bg-amber-50 p-3 rounded-full text-amber-600"><AlertCircle size={24} /></div>
+
+          {/* Radar Chart Section */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
+                </h3>
+                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                    % Kepatuhan per Kategori
+                </span>
+              </div>
+              <div className="flex justify-center">
+                <SimpleRadarChart data={radarData} />
+              </div>
           </div>
         </div>
 
-        {/* Radar Chart Section */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
-               </h3>
-               <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                  % Kepatuhan per Kategori
-               </span>
+        {/* AI Section */}
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
+          <div className="absolute top-0 right-0 p-8 opacity-10">
+            <Bot size={120} />
+          </div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-500 rounded-lg">
+                <Bot size={24} className="text-white" />
+              </div>
+              <h3 className="text-xl font-bold">{t('report.aiTitle')}</h3>
             </div>
-            <div className="flex justify-center">
-               <SimpleRadarChart data={radarData} />
-            </div>
-        </div>
-      </div>
 
-      {/* AI Section */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
-        <div className="absolute top-0 right-0 p-8 opacity-10">
-          <Bot size={120} />
+            {!audit.aiSummary ? (
+              <div className="text-center py-8">
+                <p className="text-slate-300 mb-6 max-w-lg mx-auto">
+                  {t('report.aiEmpty')}
+                </p>
+                <button
+                  onClick={handleGenerateAnalysis}
+                  disabled={isGenerating}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg shadow-blue-900/50 flex items-center gap-2 mx-auto"
+                >
+                  {isGenerating ? <Loader2 className="animate-spin" /> : <Target />}
+                  {isGenerating ? t('report.btn.analyzing') : t('report.btn.analyze')}
+                </button>
+              </div>
+            ) : (
+              <div className="animate-fade-in">
+                <div className="bg-white/10 rounded-xl p-6 mb-6 backdrop-blur-sm border border-white/10">
+                  <h4 className="text-blue-200 font-semibold mb-3 flex items-center gap-2">
+                    <FileText size={18} /> {t('report.execSummary')}
+                  </h4>
+                  <p className="leading-relaxed text-slate-100 text-lg">
+                    {audit.aiSummary}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {audit.aiRecommendations?.map((rec, idx) => (
+                    <div key={idx} className="bg-white/5 rounded-xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="bg-green-500/20 p-1.5 rounded text-green-400 mt-0.5">
+                          <ThumbsUp size={16} />
+                        </div>
+                        <p className="text-sm text-slate-200">{rec}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-6 flex justify-end">
+                  <button 
+                    onClick={handleGenerateAnalysis}
+                    className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+                  >
+                    {t('report.refresh')} <ArrowRight size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-500 rounded-lg">
-              <Bot size={24} className="text-white" />
-            </div>
-            <h3 className="text-xl font-bold">{t('report.aiTitle')}</h3>
-          </div>
-
-          {!audit.aiSummary ? (
-            <div className="text-center py-8">
-              <p className="text-slate-300 mb-6 max-w-lg mx-auto">
-                {t('report.aiEmpty')}
-              </p>
-              <button
-                onClick={handleGenerateAnalysis}
-                disabled={isGenerating}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg shadow-blue-900/50 flex items-center gap-2 mx-auto"
-              >
-                {isGenerating ? <Loader2 className="animate-spin" /> : <Target />}
-                {isGenerating ? t('report.btn.analyzing') : t('report.btn.analyze')}
-              </button>
-            </div>
-          ) : (
-            <div className="animate-fade-in">
-              <div className="bg-white/10 rounded-xl p-6 mb-6 backdrop-blur-sm border border-white/10">
-                <h4 className="text-blue-200 font-semibold mb-3 flex items-center gap-2">
-                  <FileText size={18} /> {t('report.execSummary')}
-                </h4>
-                <p className="leading-relaxed text-slate-100 text-lg">
-                  {audit.aiSummary}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {audit.aiRecommendations?.map((rec, idx) => (
-                  <div key={idx} className="bg-white/5 rounded-xl p-5 border border-white/5 hover:bg-white/10 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="bg-green-500/20 p-1.5 rounded text-green-400 mt-0.5">
-                        <ThumbsUp size={16} />
-                      </div>
-                      <p className="text-sm text-slate-200">{rec}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-6 flex justify-end">
+        {/* Details Table with Filters */}
+        <div className="mt-10">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+              {t('report.details')}
+              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                {filteredQuestions.length} {t('report.shown')}
+              </span>
+            </h3>
+            
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                <div className="px-3 py-1.5 text-slate-400 flex items-center gap-2 border-r border-slate-100">
+                  <Filter size={16} />
+                  <span className="text-xs font-semibold">{t('report.filter')}</span>
+                </div>
+                
                 <button 
-                  onClick={handleGenerateAnalysis}
-                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+                  onClick={() => toggleFilter('Non-Compliant')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Non-Compliant') 
+                    ? 'bg-red-100 text-red-700 ring-1 ring-red-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
                 >
-                   {t('report.refresh')} <ArrowRight size={12} />
+                  <XCircle size={14} />
+                  NC ({nonCompliantCount})
+                </button>
+
+                <button 
+                  onClick={() => toggleFilter('Observation')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Observation') 
+                    ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <AlertCircle size={14} />
+                  OB ({observationCount})
+                </button>
+
+                <button 
+                  onClick={() => toggleFilter('Compliant')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Compliant') 
+                    ? 'bg-green-100 text-green-700 ring-1 ring-green-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <CheckCircle size={14} />
+                  C ({compliantCount})
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Details Table with Filters */}
-      <div className="mt-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-          <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-            {t('report.details')}
-            <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-              {filteredQuestions.length} {t('report.shown')}
-            </span>
-          </h3>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-              <div className="px-3 py-1.5 text-slate-400 flex items-center gap-2 border-r border-slate-100">
-                <Filter size={16} />
-                <span className="text-xs font-semibold">{t('report.filter')}</span>
-              </div>
-              
-              <button 
-                onClick={() => toggleFilter('Non-Compliant')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  activeFilters.includes('Non-Compliant') 
-                  ? 'bg-red-100 text-red-700 ring-1 ring-red-200' 
-                  : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <XCircle size={14} />
-                NC ({nonCompliantCount})
-              </button>
-
-              <button 
-                onClick={() => toggleFilter('Observation')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  activeFilters.includes('Observation') 
-                  ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' 
-                  : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <AlertCircle size={14} />
-                OB ({observationCount})
-              </button>
-
-              <button 
-                onClick={() => toggleFilter('Compliant')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  activeFilters.includes('Compliant') 
-                  ? 'bg-green-100 text-green-700 ring-1 ring-green-200' 
-                  : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <CheckCircle size={14} />
-                C ({compliantCount})
-              </button>
-            </div>
           </div>
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 font-medium w-24">{t('report.th.code')}</th>
-                <th className="px-6 py-3 font-medium">{t('report.th.question')}</th>
-                <th className="px-6 py-3 font-medium w-32">{t('report.th.status')}</th>
-                <th className="px-6 py-3 font-medium">{t('report.th.notes')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredQuestions.length > 0 ? (
-                filteredQuestions.map(q => (
-                  <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-500 align-top">{q.id}</td>
-                    <td className="px-6 py-4 text-slate-800 align-top">
-                      <p className="mb-1">{q.questionText}</p>
-                      <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <span className={`px-2 py-1 rounded text-xs font-bold border ${
-                        q.compliance === 'Compliant' ? 'text-green-700 bg-green-50 border-green-100' :
-                        q.compliance === 'Non-Compliant' ? 'text-red-700 bg-red-50 border-red-100' :
-                        q.compliance === 'Observation' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100'
-                      }`}>
-                        {q.compliance || '-'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 text-xs align-top italic">
-                      {q.evidence || q.auditorNotes ? (
-                        <>
-                          {q.evidence && <p className="mb-1"><span className="font-semibold">Ev:</span> {q.evidence}</p>}
-                          {q.auditorNotes && <p><span className="font-semibold">Note:</span> {q.auditorNotes}</p>}
-                        </>
-                      ) : '-'}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 font-medium w-24">{t('report.th.code')}</th>
+                  <th className="px-6 py-3 font-medium">{t('report.th.question')}</th>
+                  <th className="px-6 py-3 font-medium w-32">{t('report.th.status')}</th>
+                  <th className="px-6 py-3 font-medium">{t('report.th.notes')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredQuestions.length > 0 ? (
+                  filteredQuestions.map(q => (
+                    <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-500 align-top">{q.id}</td>
+                      <td className="px-6 py-4 text-slate-800 align-top">
+                        <p className="mb-1">{q.questionText}</p>
+                        <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                          q.compliance === 'Compliant' ? 'text-green-700 bg-green-50 border-green-100' :
+                          q.compliance === 'Non-Compliant' ? 'text-red-700 bg-red-50 border-red-100' :
+                          q.compliance === 'Observation' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100'
+                        }`}>
+                          {q.compliance || '-'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 text-xs align-top italic">
+                        {q.evidence || q.auditorNotes ? (
+                          <>
+                            {q.evidence && <p className="mb-1"><span className="font-semibold">Ev:</span> {q.evidence}</p>}
+                            {q.auditorNotes && <p><span className="font-semibold">Note:</span> {q.auditorNotes}</p>}
+                          </>
+                        ) : '-'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                      <Filter size={32} className="mx-auto mb-2 opacity-20" />
+                      <p>{t('report.emptyFilter')}</p>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                    <Filter size={32} className="mx-auto mb-2 opacity-20" />
-                    <p>{t('report.emptyFilter')}</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      {/* REOPEN CONFIRMATION MODAL */}
-      {reopenDialog.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
-              <HelpCircle size={24} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
-              <p className="text-sm text-slate-500">
-                {t('report.reopenConfirm')}
-              </p>
-              <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
-                 <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button 
-                onClick={() => setReopenDialog({ isOpen: false, audit: null })}
-                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={executeReopen}
-                className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
-              >
-                Ya, Buka Kembali
-              </button>
-            </div>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+        
+        {/* REOPEN CONFIRMATION MODAL */}
+        {reopenDialog.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+                <HelpCircle size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
+                <p className="text-sm text-slate-500">
+                  {t('report.reopenConfirm')}
+                </p>
+                <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
+                  <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setReopenDialog({ isOpen: false, audit: null })}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={executeReopen}
+                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
+                >
+                  Ya, Buka Kembali
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, FC } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import NewAuditForm from './components/NewAuditForm';
@@ -14,7 +14,6 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { MasterDataProvider } from './MasterDataContext';
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { NotificationProvider } from './NotificationContext';
-import { ArrowUp } from 'lucide-react';
 
 // Mock Data for initial visualization
 const MOCK_AUDITS: AuditSession[] = [
@@ -260,10 +259,6 @@ const AppContent: FC = () => {
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // Scroll To Top Logic (Toggle Auto Scroll Up)
-  const mainContentRef = useRef<HTMLDivElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-
   const [audits, setAudits] = useState<AuditSession[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -279,36 +274,8 @@ const AppContent: FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(audits));
   }, [audits]);
 
-  // Scroll Event Listener
-  useEffect(() => {
-    const handleScroll = () => {
-      if (mainContentRef.current) {
-        // Show button if scrolled down more than 200px
-        setShowScrollTop(mainContentRef.current.scrollTop > 200);
-      }
-    };
-
-    const mainElement = mainContentRef.current;
-    if (mainElement) {
-      mainElement.addEventListener('scroll', handleScroll);
-    }
-
-    return () => {
-      if (mainElement) {
-        mainElement.removeEventListener('scroll', handleScroll);
-      }
-    };
-  }, []);
-
-  const scrollToTop = () => {
-    mainContentRef.current?.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
-  };
-
   const handleCreateAudit = (newAudit: AuditSession) => {
-    setAudits([newAudit, ...audits]);
+    setAudits(prev => [newAudit, ...prev]);
     // Only redirect if it's already in progress, otherwise stay (e.g. for scheduling)
     if (newAudit.status === AuditStatus.IN_PROGRESS) {
       setSelectedAudit(newAudit);
@@ -316,8 +283,9 @@ const AppContent: FC = () => {
     }
   };
 
+  // Safe update function using functional state update to prevent race conditions during bulk operations
   const handleUpdateAudit = (updatedAudit: AuditSession) => {
-    setAudits(audits.map(a => a.id === updatedAudit.id ? updatedAudit : a));
+    setAudits(prevAudits => prevAudits.map(a => a.id === updatedAudit.id ? updatedAudit : a));
     // If currently viewing this audit, update the selected one too
     if (selectedAudit && selectedAudit.id === updatedAudit.id) {
       setSelectedAudit(updatedAudit);
@@ -325,7 +293,7 @@ const AppContent: FC = () => {
   };
 
   const handleDeleteAudit = (auditId: string) => {
-    setAudits(audits.filter(a => a.id !== auditId));
+    setAudits(prev => prev.filter(a => a.id !== auditId));
     if (selectedAudit?.id === auditId) setSelectedAudit(null);
   };
 
@@ -351,10 +319,10 @@ const AppContent: FC = () => {
       <div className={`flex-1 relative overflow-hidden flex flex-col h-screen transition-all duration-300 ${
         isSidebarCollapsed ? 'ml-20' : 'ml-64'
       }`}>
-        {/* Main Scrollable Area */}
+        {/* Main Content Area - Layout: Fixed Header + Scrollable Content */}
+        {/* We use overflow-hidden on main to ensure individual pages manage their own scrolling */}
         <main 
-          ref={mainContentRef}
-          className="flex-1 overflow-y-auto bg-slate-50 scroll-smooth"
+          className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col"
         >
           {currentView === 'DASHBOARD' && (
             <Dashboard 
@@ -400,6 +368,10 @@ const AppContent: FC = () => {
               onCreateAudit={handleCreateAudit}
               onUpdateAudit={handleUpdateAudit}
               onDeleteAudit={handleDeleteAudit}
+              onViewReport={(audit) => {
+                 setSelectedAudit(audit);
+                 setCurrentView('REPORT');
+              }}
             />
           )}
 
@@ -410,26 +382,25 @@ const AppContent: FC = () => {
               onNavigate={setCurrentView} 
             />
           )}
-
-          {/* Padding at bottom for scroll space */}
-          <div className="h-20"></div>
         </main>
-
-        {/* Scroll To Top Button */}
-        <button
-          onClick={scrollToTop}
-          className={`fixed bottom-8 right-8 p-3 rounded-full shadow-lg text-white transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) z-50 hover:shadow-xl transform hover:-translate-y-1 flex items-center justify-center ${
-            showScrollTop 
-              ? 'opacity-100 translate-y-0 scale-100' 
-              : 'opacity-0 translate-y-10 scale-75 pointer-events-none'
-          }`}
-          style={{ backgroundColor: settings.themeColor || '#2563eb' }}
-          title="Scroll to Top"
-          aria-label="Scroll to top"
-        >
-          <ArrowUp size={24} strokeWidth={2.5} />
-        </button>
-
+        
+        {/* Auto-Hide Footer - Optimized for Full Page Usage */}
+        <footer className="fixed bottom-0 left-0 right-0 z-50 transform translate-y-[calc(100%-6px)] hover:translate-y-0 transition-transform duration-300 ease-out bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] group">
+            {/* Minimal Trigger Strip */}
+            <div className="w-full flex justify-center py-1 cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-100">
+               <div className="w-20 h-1 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors"></div>
+            </div>
+            
+            {/* Expanded Content */}
+            <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+                <p className="text-[11px] text-slate-600 font-medium">
+                    Developer App : <span className="font-bold text-slate-800">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
+                </p>
+                <p className="text-[10px] text-slate-500 mt-2 max-w-2xl leading-relaxed">
+                    Alamat ITSB: Kota Deltamas Lot-A1 CBD, Jl. Ganesha Boulevard No.1, Pasirranji, Kec. Cikarang Pusat, Kabupaten Bekasi, Jawa Barat 17530
+                </p>
+            </div>
+        </footer>
       </div>
     </div>
   );
