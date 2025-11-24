@@ -1,4 +1,3 @@
-
 import { useState, FC, FormEvent, ChangeEvent } from 'react';
 import { ViewState, UserRole, AuditStandard, User } from '../types';
 import { 
@@ -342,66 +341,72 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
   const renderUserMgmt = () => (
     <div className="flex flex-col h-full animate-fade-in bg-slate-50">
-      {/* Fixed Header */}
-      <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+      {/* Fixed Header with Integrated Filters */}
+      <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="text-blue-600" /> {t('mgmt.user.title')}
           </h2>
           <p className="text-slate-500">{t('mgmt.user.desc')}</p>
         </div>
-        <button 
-          onClick={openAddUser}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <Plus size={18} /> {t('mgmt.btnAdd')}
-        </button>
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 pb-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
-            <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row items-center gap-4">
-               <div className="relative flex-1 w-full">
+        
+        <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-stretch md:items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 md:w-64">
                  <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
                  <input 
                    type="text" 
                    placeholder="Cari nama atau username..." 
-                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white shadow-sm"
                    value={userSearchTerm}
                    onChange={(e) => setUserSearchTerm(e.target.value)}
                  />
-               </div>
-               
-               <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-                  <div className="relative shrink-0">
-                     <Filter className="absolute left-3 top-2.5 text-slate-400" size={16} />
+            </div>
+
+            {/* Filter Group */}
+            <div className="flex gap-2 w-full md:w-auto">
+                  <div className="relative shrink-0 flex-1 md:flex-none">
                      <select 
                         value={userRoleFilter}
                         onChange={(e) => setUserRoleFilter(e.target.value)}
-                        className="pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white appearance-none cursor-pointer hover:bg-slate-50"
+                        className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white cursor-pointer hover:bg-slate-50 shadow-sm"
                      >
                         <option value="ALL">Semua Peran</option>
                         {Object.values(UserRole).map(r => <option key={r} value={r}>{r}</option>)}
                      </select>
                   </div>
 
-                  <div className="relative shrink-0 max-w-[200px]">
+                  <div className="relative shrink-0 flex-1 md:flex-none max-w-[200px]">
                      <select 
                         value={userDeptFilter}
                         onChange={(e) => setUserDeptFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white cursor-pointer hover:bg-slate-50 truncate"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white cursor-pointer hover:bg-slate-50 truncate shadow-sm"
                      >
                         <option value="ALL">Semua Unit</option>
                         <option value="Global">Non-Unit (Global)</option>
                         {units.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                      </select>
                   </div>
-               </div>
             </div>
+
+            {/* Add Button */}
+            <button 
+                onClick={openAddUser}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-sm shrink-0"
+            >
+                <Plus size={18} /> 
+                <span className="hidden md:inline">{t('mgmt.btnAdd')}</span>
+                <span className="md:hidden">Tambah</span>
+            </button>
+        </div>
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 pb-20">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 font-medium">
+              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
                 <tr>
                   <th className="px-6 py-3">{t('mgmt.th.name')}</th>
                   <th className="px-6 py-3">{t('mgmt.th.role')}</th>
@@ -411,71 +416,82 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map(user => (
-                  <tr key={user.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-3 font-medium flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200">
-                        {user.avatarUrl ? (
-                           <img src={user.avatarUrl} alt="Av" className="w-full h-full object-cover" />
-                        ) : (
-                           user.name.charAt(0)
-                        )}
-                      </div>
-                      <div>
-                        <div>{user.name}</div>
-                        <div className="text-xs text-slate-400">@{user.username}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
-                        user.role === UserRole.ADMIN ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                        user.role === UserRole.AUDITOR_LEAD ? 'bg-teal-50 text-teal-700 border-teal-100' :
-                        user.role === UserRole.AUDITOR ? 'bg-green-50 text-green-700 border-green-100' :
-                        user.role === UserRole.DEPT_HEAD ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                        user.role === UserRole.SUPER_ADMIN ? 'bg-red-50 text-red-700 border-red-100' :
-                        'bg-slate-50 text-slate-600 border-slate-100'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-slate-500">{user.department || '-'}</td>
-                    <td className="px-6 py-3">
-                      <span className={`flex items-center gap-1 text-xs font-bold ${user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}`}>
-                        <span className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      {user.role === UserRole.SUPER_ADMIN && currentUser?.role !== UserRole.SUPER_ADMIN ? (
-                         <span className="flex items-center justify-end gap-1 text-xs text-slate-400 italic cursor-not-allowed bg-slate-100 px-2 py-1 rounded border border-slate-200 w-fit ml-auto">
-                            <Lock size={12} /> Protected
-                         </span>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={() => handleStatusToggle(user)}
-                            className={`p-1.5 rounded transition-colors ${
-                              user.status === 'Active' 
-                                ? 'text-amber-600 hover:bg-amber-50' 
-                                : 'text-green-600 hover:bg-green-50'
-                            }`}
-                            title={user.status === 'Active' ? "Deactivate User" : "Activate User"}
-                          >
-                            {user.status === 'Active' ? <Power size={16} /> : <UserCheck size={16} />}
-                          </button>
-                          <button onClick={() => openEditUser(user)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
-                          <button 
-                            onClick={() => setDeleteUserModal({ open: true, userId: user.id, userName: user.name })}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                            title="Delete User"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                {filteredUsers.length === 0 ? (
+                    <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-slate-400">
+                            <div className="flex flex-col items-center">
+                                <Search size={40} className="mb-2 opacity-20" />
+                                <p>Tidak ada pengguna yang ditemukan.</p>
+                            </div>
+                        </td>
+                    </tr>
+                ) : (
+                    filteredUsers.map(user => (
+                    <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-3 font-medium flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200">
+                            {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt="Av" className="w-full h-full object-cover" />
+                            ) : (
+                            user.name.charAt(0)
+                            )}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        <div>
+                            <div>{user.name}</div>
+                            <div className="text-xs text-slate-400">@{user.username}</div>
+                        </div>
+                        </td>
+                        <td className="px-6 py-3">
+                        <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                            user.role === UserRole.ADMIN ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                            user.role === UserRole.AUDITOR_LEAD ? 'bg-teal-50 text-teal-700 border-teal-100' :
+                            user.role === UserRole.AUDITOR ? 'bg-green-50 text-green-700 border-green-100' :
+                            user.role === UserRole.DEPT_HEAD ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                            user.role === UserRole.SUPER_ADMIN ? 'bg-red-50 text-red-700 border-red-100' :
+                            'bg-slate-50 text-slate-600 border-slate-100'
+                        }`}>
+                            {user.role}
+                        </span>
+                        </td>
+                        <td className="px-6 py-3 text-slate-500">{user.department || '-'}</td>
+                        <td className="px-6 py-3">
+                        <span className={`flex items-center gap-1 text-xs font-bold ${user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}`}>
+                            <span className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                            {user.status}
+                        </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                        {user.role === UserRole.SUPER_ADMIN && currentUser?.role !== UserRole.SUPER_ADMIN ? (
+                            <span className="flex items-center justify-end gap-1 text-xs text-slate-400 italic cursor-not-allowed bg-slate-100 px-2 py-1 rounded border border-slate-200 w-fit ml-auto">
+                                <Lock size={12} /> Protected
+                            </span>
+                        ) : (
+                            <div className="flex items-center justify-end gap-2">
+                            <button 
+                                onClick={() => handleStatusToggle(user)}
+                                className={`p-1.5 rounded transition-colors ${
+                                user.status === 'Active' 
+                                    ? 'text-amber-600 hover:bg-amber-50' 
+                                    : 'text-green-600 hover:bg-green-50'
+                                }`}
+                                title={user.status === 'Active' ? "Deactivate User" : "Activate User"}
+                            >
+                                {user.status === 'Active' ? <Power size={16} /> : <UserCheck size={16} />}
+                            </button>
+                            <button onClick={() => openEditUser(user)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
+                            <button 
+                                onClick={() => setDeleteUserModal({ open: true, userId: user.id, userName: user.name })}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                                title="Delete User"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                            </div>
+                        )}
+                        </td>
+                    </tr>
+                    ))
+                )}
               </tbody>
             </table>
           </div>
@@ -520,43 +536,74 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 
   const renderTemplateMgmt = () => (
      <div className="flex flex-col h-full animate-fade-in bg-slate-50">
-        <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-           <div><h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><FileBox className="text-blue-600" /> {t('mgmt.tmpl.title')}</h2><p className="text-slate-500">{t('mgmt.tmpl.desc')}</p></div>
-           <div className="flex items-center gap-2">
-              <select value={activeStandard} onChange={(e) => setActiveStandard(e.target.value as AuditStandard)} className="border rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none">{Object.values(AuditStandard).map(s => <option key={s} value={s}>{s}</option>)}</select>
-              <button onClick={() => { setQForm({ standard: activeStandard }); setIsEditingQ(false); setIsQModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"><Plus size={18} /> Pertanyaan Baru</button>
+        <div className="flex-none bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+           <div>
+             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+               <FileBox className="text-blue-600" /> {t('mgmt.tmpl.title')}
+             </h2>
+             <p className="text-slate-500">{t('mgmt.tmpl.desc')}</p>
+           </div>
+
+           <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-stretch md:items-center">
+              {/* Search */}
+              <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Cari pertanyaan..." 
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white shadow-sm" 
+                    value={qSearchTerm} 
+                    onChange={(e) => setQSearchTerm(e.target.value)} 
+                  />
+              </div>
+
+              {/* Standard Selector */}
+              <div className="relative shrink-0 flex-1 md:flex-none md:w-64">
+                 <select 
+                    value={activeStandard} 
+                    onChange={(e) => setActiveStandard(e.target.value as AuditStandard)} 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white cursor-pointer hover:bg-slate-50 shadow-sm"
+                 >
+                    {Object.values(AuditStandard).map(s => <option key={s} value={s}>{s}</option>)}
+                 </select>
+              </div>
+
+              {/* Action Buttons Group */}
+              <div className="flex gap-2 shrink-0">
+                 {/* Expand/Collapse */}
+                 <div className="flex bg-white border border-slate-300 rounded-lg shadow-sm p-0.5">
+                    <button 
+                      onClick={() => setOpenCategories(Object.keys(groupedQuestions).reduce((acc, key) => ({...acc, [key]: true}), {}))} 
+                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      title="Expand All"
+                    >
+                      <LayoutList size={20} />
+                    </button>
+                    <div className="w-px bg-slate-200 my-1"></div>
+                    <button 
+                      onClick={() => setOpenCategories({})} 
+                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      title="Collapse All"
+                    >
+                      <Layers size={20} />
+                    </button>
+                 </div>
+
+                 <button 
+                   onClick={() => { setQForm({ standard: activeStandard }); setIsEditingQ(false); setIsQModalOpen(true); }} 
+                   className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors shadow-sm"
+                 >
+                   <Plus size={18} /> 
+                   <span className="hidden md:inline">Pertanyaan Baru</span>
+                   <span className="md:hidden">Baru</span>
+                 </button>
+              </div>
            </div>
         </div>
         
-        {/* Scrollable Container with Sticky Header support */}
-        <div className="flex-1 overflow-y-auto pb-20">
-            {/* Sticky Header for Search & Controls */}
-            <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 px-6 py-4 shadow-sm">
-                <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 justify-between items-center">
-                    <div className="relative flex-1 w-full">
-                        <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                        <input type="text" placeholder="Cari pertanyaan atau kategori..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white shadow-sm" value={qSearchTerm} onChange={(e) => setQSearchTerm(e.target.value)} />
-                    </div>
-                    
-                    {/* Expand/Collapse Controls */}
-                    <div className="flex justify-end gap-2">
-                       <button 
-                         onClick={() => setOpenCategories(Object.keys(groupedQuestions).reduce((acc, key) => ({...acc, [key]: true}), {}))} 
-                         className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-white border border-blue-100 shadow-sm"
-                       >
-                         <LayoutList size={14} /> Expand All
-                       </button>
-                       <button 
-                         onClick={() => setOpenCategories({})} 
-                         className="text-xs font-bold text-slate-500 hover:bg-slate-100 px-3 py-1.5 rounded transition-colors flex items-center gap-1 bg-white border border-slate-200 shadow-sm"
-                       >
-                         <Layers size={14} /> Collapse All
-                       </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="px-6 py-6 max-w-7xl mx-auto">
+        {/* Scrollable Container */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 pb-20">
+            <div className="max-w-7xl mx-auto">
                 <div className="space-y-4">
                     {Object.entries(groupedQuestions).map(([category, items]) => (
                         <div key={category} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -741,4 +788,3 @@ const ManagementPlaceholder: FC<Props> = ({ view, onNavigate }) => {
 };
 
 export default ManagementPlaceholder;
-    

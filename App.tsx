@@ -14,6 +14,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { MasterDataProvider } from './MasterDataContext';
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { NotificationProvider } from './NotificationContext';
+import { ArrowUp } from 'lucide-react';
 
 // Mock Data for initial visualization
 const MOCK_AUDITS: AuditSession[] = [
@@ -259,6 +260,9 @@ const AppContent: FC = () => {
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
+  // Scroll to Top State
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  
   const [audits, setAudits] = useState<AuditSession[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -273,6 +277,31 @@ const AppContent: FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(audits));
   }, [audits]);
+
+  // Scroll Detection
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      // Capture scroll events from the overflow-y-auto containers inside main
+      if (target.scrollTop > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+
+    // Use capture: true to catch scroll events from children divs (since scroll doesn't bubble)
+    window.addEventListener('scroll', handleScroll, { capture: true });
+    return () => window.removeEventListener('scroll', handleScroll, { capture: true });
+  }, []);
+
+  const scrollToTop = () => {
+    // Attempt to find the currently active scroll container in main
+    const scrollable = document.querySelector('main div.overflow-y-auto');
+    if (scrollable) {
+      scrollable.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const handleCreateAudit = (newAudit: AuditSession) => {
     setAudits(prev => [newAudit, ...prev]);
@@ -316,13 +345,15 @@ const AppContent: FC = () => {
         toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
+      {/* Main Container: Flex Column to handle Footer adjustment */}
       <div className={`flex-1 relative overflow-hidden flex flex-col h-screen transition-all duration-300 ${
         isSidebarCollapsed ? 'ml-20' : 'ml-64'
       }`}>
         {/* Main Content Area - Layout: Fixed Header + Scrollable Content */}
         {/* We use overflow-hidden on main to ensure individual pages manage their own scrolling */}
+        {/* ADDED min-h-0 to ensure flex shrinking works correctly */}
         <main 
-          className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col"
+          className="flex-1 overflow-hidden bg-slate-50 relative flex flex-col min-h-0"
         >
           {currentView === 'DASHBOARD' && (
             <Dashboard 
@@ -384,17 +415,29 @@ const AppContent: FC = () => {
           )}
         </main>
         
+        {/* Back to Top Button */}
+        <button
+          onClick={scrollToTop}
+          className={`fixed bottom-8 right-8 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg transition-all duration-300 transform hover:bg-blue-700 hover:scale-110 cd-top ${
+            showScrollTop ? 'cd-is-visible opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+          }`}
+          aria-label="Back to top"
+        >
+          <ArrowUp size={24} />
+        </button>
+
         {/* Auto-Hide Footer - Optimized for Full Page Usage */}
-        <footer className="fixed bottom-0 left-0 right-0 z-50 transform translate-y-[calc(100%-6px)] hover:translate-y-0 transition-transform duration-300 ease-out bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] group">
+        {/* Flex-none + Shrink-0 prevents flex overlap issues */}
+        <footer className="flex-none shrink-0 z-40 bg-white border-t border-slate-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] group overflow-hidden transition-[max-height] duration-500 ease-in-out max-h-[14px] hover:max-h-[220px]">
             {/* Minimal Trigger Strip */}
-            <div className="w-full flex justify-center py-1 cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-100">
+            <div className="h-[14px] w-full flex items-center justify-center cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-100">
                <div className="w-20 h-1 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors"></div>
             </div>
             
             {/* Expanded Content */}
-            <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+            <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
                 <p className="text-[11px] text-slate-600 font-medium">
-                    Developer App : <span className="font-bold text-slate-800">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
+                    Developer : <span className="font-bold text-slate-800">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
                 </p>
                 <p className="text-[10px] text-slate-500 mt-2 max-w-2xl leading-relaxed">
                     Alamat ITSB: Kota Deltamas Lot-A1 CBD, Jl. Ganesha Boulevard No.1, Pasirranji, Kec. Cikarang Pusat, Kabupaten Bekasi, Jawa Barat 17530

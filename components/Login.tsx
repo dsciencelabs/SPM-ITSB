@@ -165,7 +165,10 @@ const Login: FC = () => {
              
              <div className="mt-12 text-center">
                 <p className="text-slate-500 text-xs font-medium">
-                   Developer App : <span className="font-bold text-slate-400">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
+                   Developer : <span className="font-bold text-slate-400">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
+                </p>
+                <p className="text-[10px] text-slate-600 mt-2 max-w-2xl mx-auto leading-relaxed opacity-60">
+                    Alamat ITSB: Kota Deltamas Lot-A1 CBD, Jl. Ganesha Boulevard No.1, Pasirranji, Kec. Cikarang Pusat, Kabupaten Bekasi, Jawa Barat 17530
                 </p>
              </div>
           </div>
