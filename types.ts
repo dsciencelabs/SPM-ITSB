@@ -1,6 +1,6 @@
 
 export enum AuditStandard {
-  PERMENDIKTISAINTEK_2025 = 'Permendiktisaintek No. 39/2025 (Semua Unit)',
+  PERMENDIKTISAINTEK_2025 = 'Permendiktisaintek No. 39/2025',
   LAM_TEKNIK = 'LAM TEKNIK (FTSP)',
   LAM_INFOKOM = 'LAM INFOKOM (FDDB)',
   BAN_PT = 'BAN-PT (Vokasi & Institusi)'

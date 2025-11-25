@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
   defaultStandard: AuditStandard.PERMENDIKTISAINTEK_2025
 };
 
-const STORAGE_KEY = 'ami_system_settings_v1';
+const STORAGE_KEY = 'ami_system_settings_v2';
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 

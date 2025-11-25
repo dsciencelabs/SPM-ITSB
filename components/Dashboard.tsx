@@ -1,7 +1,7 @@
 
-import { FC, ElementType } from 'react';
+import { FC, ElementType, useState } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
-import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send, CalendarClock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send, CalendarClock, ShieldCheck, Filter, XCircle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 
@@ -11,30 +11,55 @@ interface DashboardProps {
   onViewAudit: (audit: AuditSession) => void;
 }
 
-const StatCard: FC<{ title: string; value: number; icon: ElementType; color: string }> = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-start justify-between hover:shadow-md transition-shadow">
-    <div>
-      <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
-      <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: ElementType;
+  color: string;
+  onClick: () => void;
+  isActive: boolean;
+}
+
+const StatCard: FC<StatCardProps> = ({ title, value, icon: Icon, color, onClick, isActive }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white p-6 rounded-xl border cursor-pointer transition-all duration-300 ease-out group relative overflow-hidden ${
+      isActive 
+        ? `border-${color.replace('bg-', '')} shadow-lg shadow-slate-200 -translate-y-1` 
+        : 'border-slate-100 shadow-sm hover:border-slate-300 hover:shadow-md hover:-translate-y-1'
+    }`}
+  >
+    <div className="flex items-start justify-between relative z-10">
+      <div>
+        <p className={`text-sm font-medium mb-1 ${isActive ? 'text-slate-800 font-bold' : 'text-slate-500'}`}>{title}</p>
+        <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+      </div>
+      <div className={`p-3 rounded-lg ${color} bg-opacity-10 group-hover:scale-110 transition-transform`}>
+        <Icon size={24} className={color.replace('bg-', 'text-')} />
+      </div>
     </div>
-    <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
-      <Icon size={24} className={color.replace('bg-', 'text-')} />
-    </div>
+    {/* Active Background Indicator */}
+    {isActive && (
+       <div className={`absolute bottom-0 left-0 h-1 w-full ${color} animate-fade-in`}></div>
+    )}
   </div>
 );
 
 const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
+  
+  // State for filtering based on clicked card
+  const [activeFilter, setActiveFilter] = useState<'ALL' | AuditStatus>('ALL');
 
-  // Filter Audits based on Role
+  // Filter Audits based on Role (Base Data)
   const getFilteredAudits = () => {
     if (!currentUser) return [];
     
     switch (currentUser.role) {
       case UserRole.SUPER_ADMIN:
       case UserRole.ADMIN:
-      case UserRole.AUDITOR_LEAD: // Auditor Lead sees all audits to oversee process
+      case UserRole.AUDITOR_LEAD: 
         return audits; 
       
       case UserRole.AUDITOR:
@@ -44,7 +69,7 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
         );
       
       case UserRole.AUDITEE:
-      case UserRole.DEPT_HEAD: // Dept Head sees same as Auditee (Department scope)
+      case UserRole.DEPT_HEAD: 
         return audits.filter(a => a.department === currentUser.department);
         
       default:
@@ -52,15 +77,23 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
     }
   };
 
-  const filteredAudits = getFilteredAudits();
-  const completed = filteredAudits.filter(a => a.status === AuditStatus.COMPLETED).length;
-  const inProgress = filteredAudits.filter(a => a.status === AuditStatus.IN_PROGRESS).length;
-  const submitted = filteredAudits.filter(a => a.status === AuditStatus.SUBMITTED).length;
-  const planned = filteredAudits.filter(a => a.status === AuditStatus.PLANNED).length;
-  const reviewDept = filteredAudits.filter(a => a.status === AuditStatus.REVIEW_DEPT_HEAD).length;
-  const total = filteredAudits.length;
+  const baseAudits = getFilteredAudits();
+
+  // Calculate Stats
+  const completed = baseAudits.filter(a => a.status === AuditStatus.COMPLETED).length;
+  const inProgress = baseAudits.filter(a => a.status === AuditStatus.IN_PROGRESS).length;
+  const submitted = baseAudits.filter(a => a.status === AuditStatus.SUBMITTED).length;
+  const planned = baseAudits.filter(a => a.status === AuditStatus.PLANNED).length;
+  const reviewDept = baseAudits.filter(a => a.status === AuditStatus.REVIEW_DEPT_HEAD).length;
+  const total = baseAudits.length;
 
   const canCreateAudit = currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.ADMIN;
+
+  // Apply Active Card Filter for the Table
+  const tableData = baseAudits.filter(a => {
+    if (activeFilter === 'ALL') return true;
+    return a.status === activeFilter;
+  });
 
   return (
     <div className="flex flex-col h-full animate-fade-in bg-slate-50">
@@ -120,19 +153,63 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
             </div>
           )}
 
-          {/* Stats Grid - Updated to 5 columns to accommodate Planned */}
+          {/* Stats Grid - Clickable */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <StatCard title={t('dash.total')} value={total} icon={BarChart3} color="bg-blue-500" />
-            <StatCard title={t('dash.inProgress')} value={inProgress} icon={Clock} color="bg-amber-500" />
-            <StatCard title="Verifikasi Auditor" value={submitted} icon={Send} color="bg-purple-500" />
-            <StatCard title="Review DeptHead" value={reviewDept} icon={ShieldCheck} color="bg-indigo-500" />
-            <StatCard title={t('dash.completed')} value={completed} icon={CheckCircle2} color="bg-green-500" />
+            <StatCard 
+              title={t('dash.total')} 
+              value={total} 
+              icon={BarChart3} 
+              color="bg-blue-500" 
+              isActive={activeFilter === 'ALL'}
+              onClick={() => setActiveFilter('ALL')}
+            />
+            <StatCard 
+              title={t('dash.inProgress')} 
+              value={inProgress} 
+              icon={Clock} 
+              color="bg-amber-500" 
+              isActive={activeFilter === AuditStatus.IN_PROGRESS}
+              onClick={() => setActiveFilter(AuditStatus.IN_PROGRESS)}
+            />
+            <StatCard 
+              title="Verifikasi Auditor" 
+              value={submitted} 
+              icon={Send} 
+              color="bg-purple-500" 
+              isActive={activeFilter === AuditStatus.SUBMITTED}
+              onClick={() => setActiveFilter(AuditStatus.SUBMITTED)}
+            />
+            <StatCard 
+              title="Review DeptHead" 
+              value={reviewDept} 
+              icon={ShieldCheck} 
+              color="bg-indigo-500" 
+              isActive={activeFilter === AuditStatus.REVIEW_DEPT_HEAD}
+              onClick={() => setActiveFilter(AuditStatus.REVIEW_DEPT_HEAD)}
+            />
+            <StatCard 
+              title={t('dash.completed')} 
+              value={completed} 
+              icon={CheckCircle2} 
+              color="bg-green-500" 
+              isActive={activeFilter === AuditStatus.COMPLETED}
+              onClick={() => setActiveFilter(AuditStatus.COMPLETED)}
+            />
           </div>
 
-          {/* Recent History Table - Full Width */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800">{t('dash.recentHistory')}</h3>
+          {/* Recent History Table - Filtered */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-h-[400px]">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                 <h3 className="font-semibold text-slate-800">{t('dash.recentHistory')}</h3>
+                 {activeFilter !== 'ALL' && (
+                    <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded-full animate-fade-in">
+                       <Filter size={10} /> {activeFilter === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : activeFilter === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' : activeFilter}
+                       <button onClick={(e) => { e.stopPropagation(); setActiveFilter('ALL'); }} className="ml-1 hover:text-blue-900"><XCircle size={12}/></button>
+                    </span>
+                 )}
+              </div>
+              <span className="text-xs text-slate-400">Menampilkan {tableData.length} data</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -145,27 +222,31 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredAudits.length === 0 ? (
+                  {tableData.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                        {t('dash.empty')}
+                         <div className="flex flex-col items-center justify-center">
+                            <Filter size={32} className="opacity-20 mb-2" />
+                            <p>{t('report.emptyFilter')}</p>
+                            <button onClick={() => setActiveFilter('ALL')} className="mt-2 text-xs text-blue-600 font-bold hover:underline">Reset Filter</button>
+                         </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredAudits.map((audit) => (
+                    tableData.map((audit) => (
                       <tr 
                         key={audit.id} 
-                        className="hover:bg-slate-50 transition-colors cursor-pointer"
+                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
                         onClick={() => onViewAudit(audit)}
                       >
-                        <td className="px-6 py-4 font-medium text-slate-900">{audit.department}</td>
+                        <td className="px-6 py-4 font-medium text-slate-900 group-hover:text-blue-600 transition-colors">{audit.department}</td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
                             {audit.standard}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' : 
                             audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'bg-indigo-100 text-indigo-800' :
                             audit.status === AuditStatus.SUBMITTED ? 'bg-purple-100 text-purple-800' :

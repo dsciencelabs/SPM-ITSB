@@ -250,7 +250,7 @@ const MOCK_AUDITS: AuditSession[] = [
   },
 ];
 
-const STORAGE_KEY = 'ami_smart_audits_v9';
+const STORAGE_KEY = 'ami_smart_audits_v10';
 
 const AppContent: FC = () => {
   const { currentUser } = useAuth();
@@ -373,7 +373,9 @@ const AppContent: FC = () => {
           {currentView === 'AUDIT_EXECUTION' && (
             <AuditExecution 
               audit={selectedAudit}
+              audits={audits}
               onUpdateAudit={handleUpdateAudit}
+              onSelectAudit={setSelectedAudit}
               onComplete={() => {
                 handleUpdateAudit({ ...selectedAudit!, status: AuditStatus.COMPLETED });
                 setCurrentView('REPORT');

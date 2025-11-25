@@ -1,10 +1,10 @@
 
-import { useState, FC, useMemo, MouseEvent } from 'react';
+import { useState, useMemo, MouseEvent } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity, HelpCircle } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity, HelpCircle, ExternalLink } from 'lucide-react';
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import * as autoTablePlugin from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 import { useSettings } from '../SettingsContext';
@@ -119,7 +119,7 @@ const SimpleRadarChart = ({ data }: { data: { name: string; score: number }[] })
 };
 // -----------------------------------------------
 
-const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit, onBackToList }) => {
+export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, onBackToList }: ReportsProps) {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
   const { settings } = useSettings(); // Access settings for App/SPM Logo
@@ -179,6 +179,17 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
         onUpdateAudit({ ...reopenDialog.audit, status: AuditStatus.IN_PROGRESS });
         setReopenDialog({ isOpen: false, audit: null });
     }
+  };
+
+  // Helper for links
+  const getSafeUrl = (url: string | undefined) => {
+    if (!url) return '#';
+    const trimmed = url.trim();
+    if (!trimmed) return '#';
+    if (trimmed.match(/^(http|https):\/\//)) {
+      return trimmed;
+    }
+    return `https://${trimmed}`;
   };
 
   // --- LIST VIEW (REPOSITORY) ---
@@ -286,14 +297,14 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
           <div className="max-w-7xl mx-auto">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-4">{t('dash.th.dept')}</th>
-                    <th className="px-6 py-4">{t('dash.th.std')}</th>
-                    <th className="px-6 py-4">{t('dash.th.date')}</th>
-                    <th className="px-6 py-4">{t('exec.progress')}</th>
-                    <th className="px-6 py-4">{t('dash.th.status')}</th>
-                    <th className="px-6 py-4 text-right">{t('mgmt.th.action')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.dept')}</th>
+                    <th className="px-6 py-3 font-medium whitespace-nowrap w-[1%]">{t('dash.th.std')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.date')}</th>
+                    <th className="px-6 py-3 font-medium">{t('exec.progress')}</th>
+                    <th className="px-6 py-3 font-medium">{t('dash.th.status')}</th>
+                    <th className="px-6 py-3 font-medium text-right">{t('mgmt.th.action')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -315,7 +326,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
                             {a.department}
                             <div className="text-xs text-slate-500 font-normal mt-0.5">{a.name}</div>
                           </td>
-                          <td className="px-6 py-4 text-slate-600">
+                          <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
                             <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-xs">
                               {a.standard}
                             </span>
@@ -425,6 +436,7 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
   const handleGenerateAnalysis = async () => {
     setIsGenerating(true);
     try {
+      if (!audit) return;
       const analysis = await generateAuditReport(audit);
       onUpdateAudit({
         ...audit,
@@ -446,18 +458,23 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
     );
   };
 
-  const compliantCount = audit.questions.filter(q => q.compliance === 'Compliant').length;
-  const nonCompliantCount = audit.questions.filter(q => q.compliance === 'Non-Compliant').length;
-  const observationCount = audit.questions.filter(q => q.compliance === 'Observation').length;
+  const compliantCount = audit ? audit.questions.filter(q => q.compliance === 'Compliant').length : 0;
+  const nonCompliantCount = audit ? audit.questions.filter(q => q.compliance === 'Non-Compliant').length : 0;
+  const observationCount = audit ? audit.questions.filter(q => q.compliance === 'Observation').length : 0;
 
-  const filteredQuestions = audit.questions.filter(q => {
+  const filteredQuestions = audit ? audit.questions.filter(q => {
     if (!q.compliance) return false; 
     return activeFilters.includes(q.compliance);
-  });
+  }) : [];
 
   const handleExportPDF = async () => {
+    if (!audit) return;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
+    
+    // Resolve the autotable plugin safely
+    // @ts-ignore
+    const autoTable = autoTablePlugin.default || autoTablePlugin;
 
     // --- LOAD IMAGES (ITSB & SPM/App Logo) ---
     const getDataUrl = (url: string): Promise<string> => {
@@ -538,30 +555,42 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
     doc.text(t('report.details'), 14, yPos);
     yPos += 5;
 
-    autoTable(doc, {
-      startY: yPos,
-      head: [[t('report.th.code'), t('new.label.std'), t('report.th.question'), t('report.th.status'), t('report.th.notes')]],
-      body: filteredQuestions.map(q => [
-        q.id,
-        q.category,
-        q.questionText,
-        q.compliance || '-',
-        `Ev: ${q.evidence || '-'}\nNote: ${q.auditorNotes || '-'}`
-      ]),
-      headStyles: { fillColor: [30, 64, 175] },
-      styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
-      columnStyles: {
-        0: { cellWidth: 15 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 60 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 'auto' }
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-    });
+    // Use autoTable with proper type support
+    try {
+      if (typeof autoTable === 'function') {
+        autoTable(doc, {
+          startY: yPos,
+          head: [[t('report.th.code'), t('new.label.std'), t('report.th.question'), t('report.th.status'), t('report.th.notes')]],
+          body: filteredQuestions.map(q => [
+              q.id,
+              q.category,
+              q.questionText,
+              q.compliance || '-',
+              `Ev: ${q.evidence || '-'}\nNote: ${q.auditorNotes || '-'}`
+          ]),
+          headStyles: { fillColor: [30, 64, 175] },
+          styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+          columnStyles: {
+              0: { cellWidth: 15 },
+              1: { cellWidth: 25 },
+              2: { cellWidth: 60 },
+              3: { cellWidth: 25 },
+              4: { cellWidth: 'auto' }
+          },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+        });
+      } else {
+        console.error("autoTable is not a function", autoTable);
+      }
+    } catch (e) {
+      console.error("AutoTable Error", e);
+      alert("Gagal memuat tabel PDF. Coba lagi.");
+    }
 
     doc.save(`Laporan_AMI_${audit.department.replace(/\s+/g, '_')}.pdf`);
   };
+
+  if (!audit) return null;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in relative">
@@ -632,50 +661,140 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-8 max-w-6xl mx-auto w-full pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Summary Cards */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.compliant')}</p>
-                <p className="text-3xl font-bold text-green-600">{compliantCount}</p>
-              </div>
-              <div className="bg-green-50 p-3 rounded-full text-green-600"><CheckCircle size={24} /></div>
+        
+        {/* Radar Chart Section */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
+              </h3>
+              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                  % Kepatuhan per Kategori
+              </span>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.nc')}</p>
-                <p className="text-3xl font-bold text-red-600">{nonCompliantCount}</p>
-              </div>
-              <div className="bg-red-50 p-3 rounded-full text-red-600"><XCircle size={24} /></div>
+            <div className="flex justify-center">
+              <SimpleRadarChart data={radarData} />
             </div>
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500 font-medium mb-1">{t('report.ob')}</p>
-                <p className="text-3xl font-bold text-amber-600">{observationCount}</p>
+        </div>
+        
+        {/* Details Table with Filters - MOVED UP */}
+        <div className="mt-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+              {t('report.details')}
+              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                {filteredQuestions.length} {t('report.shown')}
+              </span>
+            </h3>
+            
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                <div className="px-3 py-1.5 text-slate-400 flex items-center gap-2 border-r border-slate-100">
+                  <Filter size={16} />
+                  <span className="text-xs font-semibold">{t('report.filter')}</span>
+                </div>
+                
+                <button 
+                  onClick={() => toggleFilter('Non-Compliant')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Non-Compliant') 
+                    ? 'bg-red-100 text-red-700 ring-1 ring-red-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <XCircle size={14} />
+                  NC ({nonCompliantCount})
+                </button>
+
+                <button 
+                  onClick={() => toggleFilter('Observation')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Observation') 
+                    ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <AlertCircle size={14} />
+                  OB ({observationCount})
+                </button>
+
+                <button 
+                  onClick={() => toggleFilter('Compliant')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    activeFilters.includes('Compliant') 
+                    ? 'bg-green-100 text-green-700 ring-1 ring-green-200' 
+                    : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  <CheckCircle size={14} />
+                  C ({compliantCount})
+                </button>
               </div>
-              <div className="bg-amber-50 p-3 rounded-full text-amber-600"><AlertCircle size={24} /></div>
             </div>
           </div>
 
-          {/* Radar Chart Section */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
-                </h3>
-                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                    % Kepatuhan per Kategori
-                </span>
-              </div>
-              <div className="flex justify-center">
-                <SimpleRadarChart data={radarData} />
-              </div>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 font-medium w-24">{t('report.th.code')}</th>
+                  <th className="px-6 py-3 font-medium">{t('report.th.question')}</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap w-[1%]">{t('report.th.status')}</th>
+                  <th className="px-6 py-3 font-medium">{t('report.th.notes')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredQuestions.length > 0 ? (
+                  filteredQuestions.map(q => (
+                    <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-500 align-top">{q.id}</td>
+                      <td className="px-6 py-4 text-slate-800 align-top">
+                        <p className="mb-1">{q.questionText}</p>
+                        <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
+                      </td>
+                      <td className="px-6 py-4 align-top whitespace-nowrap">
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                          q.compliance === 'Compliant' ? 'text-green-700 bg-green-50 border-green-100' :
+                          q.compliance === 'Non-Compliant' ? 'text-red-700 bg-red-50 border-red-100' :
+                          q.compliance === 'Observation' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100'
+                        }`}>
+                          {q.compliance || '-'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 text-xs align-top">
+                        {q.evidence || q.auditorNotes ? (
+                          <div className="space-y-1">
+                            {q.evidence && (
+                               <div className="flex items-start gap-1">
+                                  <span className="font-semibold shrink-0">Ev:</span> 
+                                  <a href={getSafeUrl(q.evidence)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all flex items-center gap-0.5">
+                                    {q.evidence} <ExternalLink size={8} />
+                                  </a>
+                               </div>
+                            )}
+                            {q.auditorNotes && (
+                                <p><span className="font-semibold">Note:</span> {q.auditorNotes}</p>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                      <Filter size={32} className="mx-auto mb-2 opacity-20" />
+                      <p>{t('report.emptyFilter')}</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* AI Section */}
-        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
+        {/* AI Section - MOVED DOWN */}
+        <div className="mt-10 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <Bot size={120} />
           </div>
@@ -739,113 +858,6 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
           </div>
         </div>
         
-        {/* Details Table with Filters */}
-        <div className="mt-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-              {t('report.details')}
-              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-                {filteredQuestions.length} {t('report.shown')}
-              </span>
-            </h3>
-            
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-                <div className="px-3 py-1.5 text-slate-400 flex items-center gap-2 border-r border-slate-100">
-                  <Filter size={16} />
-                  <span className="text-xs font-semibold">{t('report.filter')}</span>
-                </div>
-                
-                <button 
-                  onClick={() => toggleFilter('Non-Compliant')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    activeFilters.includes('Non-Compliant') 
-                    ? 'bg-red-100 text-red-700 ring-1 ring-red-200' 
-                    : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <XCircle size={14} />
-                  NC ({nonCompliantCount})
-                </button>
-
-                <button 
-                  onClick={() => toggleFilter('Observation')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    activeFilters.includes('Observation') 
-                    ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' 
-                    : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <AlertCircle size={14} />
-                  OB ({observationCount})
-                </button>
-
-                <button 
-                  onClick={() => toggleFilter('Compliant')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                    activeFilters.includes('Compliant') 
-                    ? 'bg-green-100 text-green-700 ring-1 ring-green-200' 
-                    : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <CheckCircle size={14} />
-                  C ({compliantCount})
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 font-medium w-24">{t('report.th.code')}</th>
-                  <th className="px-6 py-3 font-medium">{t('report.th.question')}</th>
-                  <th className="px-6 py-3 font-medium w-32">{t('report.th.status')}</th>
-                  <th className="px-6 py-3 font-medium">{t('report.th.notes')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredQuestions.length > 0 ? (
-                  filteredQuestions.map(q => (
-                    <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-500 align-top">{q.id}</td>
-                      <td className="px-6 py-4 text-slate-800 align-top">
-                        <p className="mb-1">{q.questionText}</p>
-                        <span className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{q.category}</span>
-                      </td>
-                      <td className="px-6 py-4 align-top">
-                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
-                          q.compliance === 'Compliant' ? 'text-green-700 bg-green-50 border-green-100' :
-                          q.compliance === 'Non-Compliant' ? 'text-red-700 bg-red-50 border-red-100' :
-                          q.compliance === 'Observation' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100'
-                        }`}>
-                          {q.compliance || '-'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 text-xs align-top italic">
-                        {q.evidence || q.auditorNotes ? (
-                          <>
-                            {q.evidence && <p className="mb-1"><span className="font-semibold">Ev:</span> {q.evidence}</p>}
-                            {q.auditorNotes && <p><span className="font-semibold">Note:</span> {q.auditorNotes}</p>}
-                          </>
-                        ) : '-'}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                      <Filter size={32} className="mx-auto mb-2 opacity-20" />
-                      <p>{t('report.emptyFilter')}</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
         {/* REOPEN CONFIRMATION MODAL */}
         {reopenDialog.isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
@@ -882,6 +894,4 @@ const Reports: FC<ReportsProps> = ({ audit, audits, onUpdateAudit, onSelectAudit
       </div>
     </div>
   );
-};
-
-export default Reports;
+}

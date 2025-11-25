@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { AuditStandard, AuditQuestion, AuditSession } from "../types";
 
 // Initialize Gemini Client
@@ -21,7 +21,7 @@ export const generateChecklist = async (standard: AuditStandard, department: str
     Focus on "Outcome Based Education" (OBE) and recent quality trends.
   `;
 
-  const responseSchema: Schema = {
+  const responseSchema = {
     type: Type.ARRAY,
     items: {
       type: Type.OBJECT,
@@ -90,7 +90,7 @@ export const generateAuditReport = async (audit: AuditSession): Promise<{ summar
     2. A list of 3 specific, actionable strategic recommendations to improve their accreditation score.
   `;
 
-  const responseSchema: Schema = {
+  const responseSchema = {
     type: Type.OBJECT,
     properties: {
       summary: { type: Type.STRING, description: "Executive summary of findings." },
