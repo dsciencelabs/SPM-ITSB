@@ -4,6 +4,7 @@ import { AuditSession, AuditStatus, UserRole } from '../types';
 import { CheckCircle2, Clock, AlertTriangle, BarChart3, Building2, UserCheck, UserCog, Send, CalendarClock, ShieldCheck, Filter, XCircle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
+import { useMasterData } from '../MasterDataContext';
 
 interface DashboardProps {
   audits: AuditSession[];
@@ -48,6 +49,7 @@ const StatCard: FC<StatCardProps> = ({ title, value, icon: Icon, color, onClick,
 const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
+  const { units } = useMasterData();
   
   // State for filtering based on clicked card
   const [activeFilter, setActiveFilter] = useState<'ALL' | AuditStatus>('ALL');
@@ -68,8 +70,18 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
           a.assignedAuditorId === currentUser.id
         );
       
-      case UserRole.AUDITEE:
       case UserRole.DEPT_HEAD: 
+        // Allow Dean to see Faculty audits AND Study Program audits (Children)
+        return audits.filter(a => {
+            // 1. Direct match (e.g. Audit Fakultas)
+            if (a.department === currentUser.department) return true;
+            // 2. Child match (e.g. Audit Prodi under Faculty)
+            const unit = units.find(u => u.name === a.department);
+            return unit?.faculty === currentUser.department;
+        });
+
+      case UserRole.AUDITEE:
+        // Auditee usually sees only strict department matches
         return audits.filter(a => a.department === currentUser.department);
         
       default:
@@ -94,6 +106,18 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
     if (activeFilter === 'ALL') return true;
     return a.status === activeFilter;
   });
+
+  const getStatusLabel = (status: AuditStatus) => {
+    switch(status) {
+        case AuditStatus.PENDING_SCHEDULING: return t('status.pending');
+        case AuditStatus.PLANNED: return t('status.planned');
+        case AuditStatus.IN_PROGRESS: return t('status.progress');
+        case AuditStatus.SUBMITTED: return t('status.submitted');
+        case AuditStatus.REVIEW_DEPT_HEAD: return t('status.review');
+        case AuditStatus.COMPLETED: return t('status.completed');
+        default: return status;
+    }
+  };
 
   return (
     <div className="flex flex-col h-full animate-fade-in bg-slate-50">
@@ -127,13 +151,13 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-8 py-6 pb-20">
-          {/* Welcome Banner for Auditee/Dept Head */}
-          {(currentUser?.role === UserRole.AUDITEE || currentUser?.role === UserRole.DEPT_HEAD) && (
+          {/* Welcome Banner for Dept Head ONLY - Auditee moved to AuditExecution */}
+          {currentUser?.role === UserRole.DEPT_HEAD && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-amber-800">
               <Building2 size={24} />
               <div>
-                <p className="font-bold">Area Unit: {currentUser.department}</p>
-                <p className="text-sm">Anda hanya dapat mengakses data audit untuk unit kerja Anda. Silakan lengkapi bukti dan rencana tindak lanjut pada audit yang aktif.</p>
+                <p className="font-bold">{t('dash.welcome.auditee')} {currentUser.department}</p>
+                <p className="text-sm">{t('dash.welcome.auditee.msg')}</p>
               </div>
             </div>
           )}
@@ -143,59 +167,61 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center gap-3 text-green-800">
               <UserCheck size={24} />
               <div>
-                <p className="font-bold">{currentUser.role === UserRole.AUDITOR_LEAD ? 'Lead Auditor Oversight' : 'Penugasan Auditor'}</p>
+                <p className="font-bold">{currentUser.role === UserRole.AUDITOR_LEAD ? 'Lead Auditor Oversight' : t('dash.welcome.auditor')}</p>
                 <p className="text-sm">
                   {currentUser.role === UserRole.AUDITOR_LEAD 
                     ? 'Anda memiliki akses untuk memantau seluruh audit yang berjalan serta melakukan verifikasi.'
-                    : 'Menampilkan daftar audit yang ditugaskan kepada Anda. Silakan lakukan penilaian kepatuhan dan berikan catatan.'}
+                    : t('dash.welcome.auditor.msg')}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Stats Grid - Clickable */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-            <StatCard 
-              title={t('dash.total')} 
-              value={total} 
-              icon={BarChart3} 
-              color="bg-blue-500" 
-              isActive={activeFilter === 'ALL'}
-              onClick={() => setActiveFilter('ALL')}
-            />
-            <StatCard 
-              title={t('dash.inProgress')} 
-              value={inProgress} 
-              icon={Clock} 
-              color="bg-amber-500" 
-              isActive={activeFilter === AuditStatus.IN_PROGRESS}
-              onClick={() => setActiveFilter(AuditStatus.IN_PROGRESS)}
-            />
-            <StatCard 
-              title="Verifikasi Auditor" 
-              value={submitted} 
-              icon={Send} 
-              color="bg-purple-500" 
-              isActive={activeFilter === AuditStatus.SUBMITTED}
-              onClick={() => setActiveFilter(AuditStatus.SUBMITTED)}
-            />
-            <StatCard 
-              title="Review DeptHead" 
-              value={reviewDept} 
-              icon={ShieldCheck} 
-              color="bg-indigo-500" 
-              isActive={activeFilter === AuditStatus.REVIEW_DEPT_HEAD}
-              onClick={() => setActiveFilter(AuditStatus.REVIEW_DEPT_HEAD)}
-            />
-            <StatCard 
-              title={t('dash.completed')} 
-              value={completed} 
-              icon={CheckCircle2} 
-              color="bg-green-500" 
-              isActive={activeFilter === AuditStatus.COMPLETED}
-              onClick={() => setActiveFilter(AuditStatus.COMPLETED)}
-            />
-          </div>
+          {/* Stats Grid - Clickable (HIDDEN FOR AUDITEE) */}
+          {currentUser?.role !== UserRole.AUDITEE && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+              <StatCard 
+                title={t('dash.total')} 
+                value={total} 
+                icon={BarChart3} 
+                color="bg-blue-500" 
+                isActive={activeFilter === 'ALL'}
+                onClick={() => setActiveFilter('ALL')}
+              />
+              <StatCard 
+                title={t('dash.inProgress')} 
+                value={inProgress} 
+                icon={Clock} 
+                color="bg-amber-500" 
+                isActive={activeFilter === AuditStatus.IN_PROGRESS}
+                onClick={() => setActiveFilter(AuditStatus.IN_PROGRESS)}
+              />
+              <StatCard 
+                title={t('dash.submitted')} 
+                value={submitted} 
+                icon={Send} 
+                color="bg-purple-500" 
+                isActive={activeFilter === AuditStatus.SUBMITTED}
+                onClick={() => setActiveFilter(AuditStatus.SUBMITTED)}
+              />
+              <StatCard 
+                title={t('dash.review')} 
+                value={reviewDept} 
+                icon={ShieldCheck} 
+                color="bg-indigo-500" 
+                isActive={activeFilter === AuditStatus.REVIEW_DEPT_HEAD}
+                onClick={() => setActiveFilter(AuditStatus.REVIEW_DEPT_HEAD)}
+              />
+              <StatCard 
+                title={t('dash.completed')} 
+                value={completed} 
+                icon={CheckCircle2} 
+                color="bg-green-500" 
+                isActive={activeFilter === AuditStatus.COMPLETED}
+                onClick={() => setActiveFilter(AuditStatus.COMPLETED)}
+              />
+            </div>
+          )}
 
           {/* Recent History Table - Filtered */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-h-[400px]">
@@ -204,7 +230,7 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
                  <h3 className="font-semibold text-slate-800">{t('dash.recentHistory')}</h3>
                  {activeFilter !== 'ALL' && (
                     <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded-full animate-fade-in">
-                       <Filter size={10} /> {activeFilter === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : activeFilter === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' : activeFilter}
+                       <Filter size={10} /> {getStatusLabel(activeFilter)}
                        <button onClick={(e) => { e.stopPropagation(); setActiveFilter('ALL'); }} className="ml-1 hover:text-blue-900"><XCircle size={12}/></button>
                     </span>
                  )}
@@ -254,9 +280,7 @@ const Dashboard: FC<DashboardProps> = ({ audits, onCreateNew, onViewAudit }) => 
                             audit.status === AuditStatus.PLANNED ? 'bg-slate-100 text-slate-800' :
                             'bg-slate-100 text-slate-600'
                           }`}>
-                            {audit.status === AuditStatus.SUBMITTED ? 'Verifikasi Auditor' : 
-                             audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review DeptHead' :
-                             audit.status}
+                            {getStatusLabel(audit.status)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-slate-500">{new Date(audit.date).toLocaleDateString('id-ID')}</td>

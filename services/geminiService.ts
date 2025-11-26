@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AuditStandard, AuditQuestion, AuditSession } from "../types";
 
@@ -10,8 +11,12 @@ const modelName = "gemini-2.5-flash";
  * Generates a specific checklist based on the accreditation standard.
  * Note: This is a Fallback. Primary data should come from MasterDataContext.
  */
-export const generateChecklist = async (standard: AuditStandard, department: string): Promise<AuditQuestion[]> => {
+export const generateChecklist = async (standard: AuditStandard, department: string, language: 'id' | 'en' = 'id'): Promise<AuditQuestion[]> => {
   
+  const langInstruction = language === 'id' 
+    ? "Output harus dalam Bahasa Indonesia yang formal dan akademis." 
+    : "Output must be in English (Academic/Formal).";
+
   const prompt = `
     You are a Senior Quality Assurance Auditor for Higher Education in Indonesia.
     Generate a specialized Audit Checklist for a study program in the department of "${department}".
@@ -19,6 +24,8 @@ export const generateChecklist = async (standard: AuditStandard, department: str
     
     Generate exactly 5 high-impact, specific audit questions/indicators that are critical for this standard.
     Focus on "Outcome Based Education" (OBE) and recent quality trends.
+    
+    IMPORTANT: ${langInstruction}
   `;
 
   const responseSchema = {
@@ -65,7 +72,7 @@ export const generateChecklist = async (standard: AuditStandard, department: str
 /**
  * Analyzes the audit results and produces a report.
  */
-export const generateAuditReport = async (audit: AuditSession): Promise<{ summary: string; recommendations: string[] }> => {
+export const generateAuditReport = async (audit: AuditSession, language: 'id' | 'en' = 'id'): Promise<{ summary: string; recommendations: string[] }> => {
   
   // Filter relevant data to send to LLM to save tokens
   const auditContext = {
@@ -80,6 +87,10 @@ export const generateAuditReport = async (audit: AuditSession): Promise<{ summar
     }))
   };
 
+  const langInstruction = language === 'id' 
+    ? "IMPORTANT: Provide the summary and recommendations strictly in INDONESIAN (Bahasa Indonesia)." 
+    : "IMPORTANT: Provide the summary and recommendations strictly in ENGLISH.";
+
   const prompt = `
     Analyze the following Internal Quality Audit (AMI) results for the "${audit.department}" department using standard "${audit.standard}".
     
@@ -88,6 +99,8 @@ export const generateAuditReport = async (audit: AuditSession): Promise<{ summar
     Please provide:
     1. An executive summary of the audit performance (max 100 words).
     2. A list of 3 specific, actionable strategic recommendations to improve their accreditation score.
+
+    ${langInstruction}
   `;
 
   const responseSchema = {

@@ -46,7 +46,8 @@ export interface AuditQuestion {
   // Auditee Self Assessment (Claim)
   auditeeSelfAssessment?: 'Compliant' | 'Non-Compliant' | 'Observation' | null;
   
-  evidence?: string;
+  evidence?: string; // Stores URL or Base64 Data
+  evidenceFileName?: string; // Stores the Virtual Path / Filename for display
   auditorNotes?: string;
   
   // Auditee Response (Legacy/Additional text)
@@ -82,6 +83,7 @@ export type ViewState =
   | 'NEW_AUDIT' 
   | 'AUDIT_EXECUTION' 
   | 'REPORT' 
+  | 'SIMULATION' // NEW: Simulasi Nilai
   // SuperAdmin & Admin Views
   | 'USER_MGMT' 
   | 'TEMPLATE_MGMT'

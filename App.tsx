@@ -1,10 +1,10 @@
-
 import { useState, useEffect, FC } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import NewAuditForm from './components/NewAuditForm';
 import AuditExecution from './components/AuditExecution';
 import Reports from './components/Reports';
+import Simulation from './components/Simulation'; // Import new component
 import Login from './components/Login';
 import ManagementPlaceholder from './components/ManagementPlaceholder';
 import AuditSchedule from './components/AuditSchedule';
@@ -42,6 +42,7 @@ const MOCK_AUDITS: AuditSession[] = [
          questionText: 'Apakah Visi Keilmuan Program Studi (VMTS) memiliki keunikan spesifik di bidang Infokom/Digital dan telah disosialisasikan?',
          auditeeSelfAssessment: 'Compliant',
          evidence: 'https://informatika.itsb.ac.id/visi-misi-dokumen-sk-rektor.pdf',
+         evidenceFileName: 'uploads/2024-10-15/C_1_Visi_Misi/LI_C_1/visi-misi-sk.pdf', // Example Virtual Path
          compliance: 'Compliant',
          auditorNotes: 'Visi sangat jelas memuat unsur "Green & Digital Eco-City". Bukti sosialisasi tersedia di website dan notulensi rapat prodi.',
          actionPlan: '',
@@ -278,6 +279,13 @@ const AppContent: FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(audits));
   }, [audits]);
 
+  // Force redirect Auditee to Audit Execution if they land on Dashboard (which is removed from sidebar)
+  useEffect(() => {
+    if (currentUser?.role === UserRole.AUDITEE && currentView === 'DASHBOARD') {
+      setCurrentView('AUDIT_EXECUTION');
+    }
+  }, [currentUser, currentView]);
+
   // Scroll Detection
   useEffect(() => {
     const handleScroll = (e: Event) => {
@@ -393,6 +401,10 @@ const AppContent: FC = () => {
               }}
               onBackToList={() => setSelectedAudit(null)}
             />
+          )}
+
+          {currentView === 'SIMULATION' && (
+             <Simulation audits={audits} />
           )}
 
           {currentView === 'AUDIT_SCHEDULE' && (

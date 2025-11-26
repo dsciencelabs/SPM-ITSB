@@ -2,12 +2,13 @@
 import { useState, useMemo, MouseEvent } from 'react';
 import { AuditSession, AuditStatus, UserRole } from '../types';
 import { generateAuditReport } from '../services/geminiService';
-import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity, HelpCircle, ExternalLink } from 'lucide-react';
+import { Bot, FileText, ThumbsUp, Target, ArrowRight, Loader2, Filter, CheckCircle, AlertCircle, XCircle, Download, ShieldCheck, ChevronLeft, Search, PieChart, Clock, RotateCcw, Send, Activity, HelpCircle, ExternalLink, File } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import * as autoTablePlugin from "jspdf-autotable";
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
 import { useSettings } from '../SettingsContext';
+import { useNotification } from '../NotificationContext';
 
 interface ReportsProps {
   audit: AuditSession | null;
@@ -26,7 +27,7 @@ const SimpleRadarChart = ({ data }: { data: { name: string; score: number }[] })
 
   if (data.length < 3) {
     return (
-      <div className="h-[300px] flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+      <div className="w-full h-[300px] flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
         <Activity size={32} className="mb-2 opacity-50" />
         <p className="text-sm">Butuh minimal 3 kategori untuk grafik radar.</p>
       </div>
@@ -49,7 +50,7 @@ const SimpleRadarChart = ({ data }: { data: { name: string; score: number }[] })
   }).join(" ");
 
   return (
-    <div className="flex items-center justify-center py-4">
+    <div className="flex items-center justify-center py-4 w-full">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {/* Grid Circles (Levels) */}
         {[...Array(levels)].map((_, i) => {
@@ -120,9 +121,10 @@ const SimpleRadarChart = ({ data }: { data: { name: string; score: number }[] })
 // -----------------------------------------------
 
 export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, onBackToList }: ReportsProps) {
-  const { t } = useLanguage();
-  const { currentUser } = useAuth();
+  const { t, language } = useLanguage();
+  const { currentUser, users } = useAuth();
   const { settings } = useSettings(); // Access settings for App/SPM Logo
+  const { addNotification } = useNotification();
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>(['Compliant', 'Non-Compliant', 'Observation']);
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,6 +143,33 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
   
   // Reopen Permission specifically (Only Admin/SuperAdmin)
   const canReopen = isAdmin;
+
+  // HELPER: Status Translation
+  const getStatusLabel = (status: AuditStatus) => {
+    switch(status) {
+        case AuditStatus.PENDING_SCHEDULING: return t('status.pending');
+        case AuditStatus.PLANNED: return t('status.planned');
+        case AuditStatus.IN_PROGRESS: return t('status.progress');
+        case AuditStatus.SUBMITTED: return t('status.submitted');
+        case AuditStatus.REVIEW_DEPT_HEAD: return t('status.review');
+        case AuditStatus.COMPLETED: return t('status.completed');
+        default: return status;
+    }
+  };
+
+  // HELPER: Compliance Translation
+  const getComplianceLabel = (status: string | null, useAbbr: boolean = false) => {
+      if (!status) return '-';
+      if (useAbbr) {
+        if (status === 'Compliant') return t('abbr.compliant');
+        if (status === 'Non-Compliant') return t('abbr.noncompliant');
+        if (status === 'Observation') return t('abbr.observation');
+      }
+      if (status === 'Compliant') return t('exec.status.compliant');
+      if (status === 'Non-Compliant') return t('exec.status.noncompliant');
+      if (status === 'Observation') return t('exec.status.observation');
+      return status;
+  };
 
   // CALCULATE RADAR DATA MEMO
   const radarData = useMemo(() => {
@@ -177,7 +206,29 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
   const executeReopen = () => {
     if (reopenDialog.audit) {
         onUpdateAudit({ ...reopenDialog.audit, status: AuditStatus.IN_PROGRESS });
+        
+        // Notification Logic
+        if (reopenDialog.audit.assignedAuditorId) {
+            addNotification(
+                reopenDialog.audit.assignedAuditorId,
+                "Audit Dibuka Kembali", 
+                `Audit untuk ${reopenDialog.audit.department} telah dibuka kembali oleh Admin. Silakan cek revisi.`,
+                "WARNING"
+            );
+        }
+
+        const auditees = users.filter(u => u.department === reopenDialog.audit?.department && u.role === UserRole.AUDITEE);
+        auditees.forEach(a => {
+            addNotification(
+                a.id,
+                "Audit Dibuka Kembali", 
+                `Status audit untuk ${reopenDialog.audit?.department} dikembalikan menjadi In Progress.`,
+                "WARNING"
+            );
+        });
+
         setReopenDialog({ isOpen: false, audit: null });
+        alert("Audit berhasil dibuka kembali (Reopened). Notifikasi telah dikirim.");
     }
   };
 
@@ -190,6 +241,46 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
       return trimmed;
     }
     return `https://${trimmed}`;
+  };
+
+  // Helper to open Blob or URL
+  const openLink = (url: string) => {
+      if (!url) return;
+      
+      if (url.startsWith('data:')) {
+          try {
+            const arr = url.split(',');
+            const mimeMatch = arr[0].match(/:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            
+            const blob = new Blob([u8arr], { type: mime });
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // Invisible link technique
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            
+          } catch(e) {
+             console.error("Failed to open file:", e);
+             // Fallback
+             window.open(url, '_blank');
+          }
+      } else {
+          window.open(getSafeUrl(url), '_blank');
+      }
   };
 
   // --- LIST VIEW (REPOSITORY) ---
@@ -346,23 +437,18 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                             {a.status === AuditStatus.COMPLETED ? (
-                               <span className="flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 w-fit">
-                                 <CheckCircle size={12} /> {t('repo.completed')}
-                               </span>
-                             ) : a.status === AuditStatus.SUBMITTED ? (
-                               <span className="flex items-center gap-1.5 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100 w-fit">
-                                 <Send size={12} /> Submitted
-                               </span>
-                             ) : a.status === AuditStatus.REVIEW_DEPT_HEAD ? (
-                               <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 w-fit">
-                                 <ShieldCheck size={12} /> Review Ka. Unit
-                               </span>
-                             ) : (
-                               <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 w-fit">
-                                 <Clock size={12} /> {t('repo.progress')}
-                               </span>
-                             )}
+                             <span className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border w-fit ${
+                                a.status === AuditStatus.COMPLETED ? 'text-green-700 bg-green-50 border-green-100' :
+                                a.status === AuditStatus.SUBMITTED ? 'text-purple-700 bg-purple-50 border-purple-100' :
+                                a.status === AuditStatus.REVIEW_DEPT_HEAD ? 'text-indigo-700 bg-indigo-50 border-indigo-100' :
+                                'text-amber-700 bg-amber-50 border-amber-100'
+                             }`}>
+                                {a.status === AuditStatus.COMPLETED ? <CheckCircle size={12}/> : 
+                                 a.status === AuditStatus.SUBMITTED ? <Send size={12}/> :
+                                 a.status === AuditStatus.REVIEW_DEPT_HEAD ? <ShieldCheck size={12}/> :
+                                 <Clock size={12}/>}
+                                {getStatusLabel(a.status)}
+                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-3">
@@ -402,7 +488,7 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                 <HelpCircle size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{t('report.btn.reopen')}?</h3>
                 <p className="text-sm text-slate-500">
                   {t('report.reopenConfirm')}
                 </p>
@@ -415,13 +501,13 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                   onClick={() => setReopenDialog({ isOpen: false, audit: null })}
                   className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
                 >
-                  Batal
+                  {t('confirm.no')}
                 </button>
                 <button 
                   onClick={executeReopen}
                   className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
                 >
-                  Ya, Buka Kembali
+                  {t('confirm.yes')}
                 </button>
               </div>
             </div>
@@ -437,7 +523,8 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
     setIsGenerating(true);
     try {
       if (!audit) return;
-      const analysis = await generateAuditReport(audit);
+      // Pass the current language preference to the service
+      const analysis = await generateAuditReport(audit, language);
       onUpdateAudit({
         ...audit,
         aiSummary: analysis.summary,
@@ -520,10 +607,10 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(80);
-    doc.text(`${t('new.label.dept')}: ${audit.department}`, 14, 32);
-    doc.text(`${t('new.label.std')}: ${audit.standard}`, 14, 37);
+    doc.text(`${t('dash.th.dept')}: ${audit.department}`, 14, 32);
+    doc.text(`${t('dash.th.std')}: ${audit.standard}`, 14, 37);
     doc.text(`${t('dash.th.date')}: ${new Date(audit.date).toLocaleDateString()}`, 14, 42);
-    doc.text(`${t('dash.th.status')}: ${audit.status}`, 14, 47);
+    doc.text(`${t('dash.th.status')}: ${getStatusLabel(audit.status)}`, 14, 47);
 
     let yPos = 55;
 
@@ -531,12 +618,96 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
     doc.line(14, 50, pageWidth - 14, 50);
     doc.setFontSize(11);
     doc.setTextColor(0);
-    doc.text("Compliance Summary:", 14, yPos);
+    doc.text(t('report.compliance_summary'), 14, yPos);
     yPos += 7;
     doc.setFontSize(10);
-    doc.text(`Compliant: ${compliantCount}  |  Non-Compliant: ${nonCompliantCount}  |  Observation: ${observationCount}`, 14, yPos);
-    yPos += 12;
+    doc.text(`${t('term.compliant')}: ${compliantCount}  |  ${t('term.noncompliant')}: ${nonCompliantCount}  |  ${t('term.observation')}: ${observationCount}`, 14, yPos);
+    yPos += 15;
 
+    // --- PETA KETERCAPAIAN STANDAR (RADAR CHART) IN PDF ---
+    // 1. Calculate Data (Logic copied from radarData useMemo)
+    const groups: Record<string, { total: number; compliant: number }> = {};
+    audit.questions.forEach(q => {
+        const cat = q.category.split('-')[0].trim();
+        if (!groups[cat]) groups[cat] = { total: 0, compliant: 0 };
+        groups[cat].total += 1;
+        if (q.compliance === 'Compliant') groups[cat].compliant += 1;
+    });
+    const chartData = Object.entries(groups).map(([name, stats]) => ({
+        name,
+        score: Math.round((stats.compliant / stats.total) * 100)
+    }));
+
+    // 2. Draw Chart if data exists
+    if (chartData.length >= 3) {
+        const chartX = pageWidth / 2;
+        const chartY = yPos + 30; 
+        const radius = 25;
+
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0);
+        doc.text(t('report.chart.radar'), 14, yPos);
+        
+        // Draw Webs (Levels: 25, 50, 75, 100%)
+        doc.setDrawColor(220);
+        doc.setLineWidth(0.1);
+        [0.25, 0.5, 0.75, 1].forEach(scale => {
+             doc.circle(chartX, chartY, radius * scale, 'S');
+        });
+
+        // Draw Axes and Labels
+        chartData.forEach((d, i) => {
+            const angle = (Math.PI * 2 * i) / chartData.length - (Math.PI / 2);
+            // Axis line
+            const ax = chartX + radius * Math.cos(angle);
+            const ay = chartY + radius * Math.sin(angle);
+            doc.setDrawColor(200);
+            doc.line(chartX, chartY, ax, ay);
+
+            // Label
+            const lx = chartX + (radius + 8) * Math.cos(angle);
+            const ly = chartY + (radius + 8) * Math.sin(angle);
+            doc.setTextColor(100);
+            doc.setFontSize(7);
+            doc.text(`${d.name} (${d.score}%)`, lx, ly, { align: 'center', baseline: 'middle' });
+        });
+
+        // Draw Data Polygon
+        doc.setDrawColor(37, 99, 235); // Blue
+        doc.setLineWidth(0.5);
+        doc.setFillColor(37, 99, 235);
+        
+        let firstPoint: {x: number, y: number} | null = null;
+        let lastPoint: {x: number, y: number} | null = null;
+
+        chartData.forEach((d, i) => {
+            const angle = (Math.PI * 2 * i) / chartData.length - (Math.PI / 2);
+            const dist = radius * (d.score / 100);
+            const px = chartX + dist * Math.cos(angle);
+            const py = chartY + dist * Math.sin(angle);
+
+            if (i === 0) firstPoint = { x: px, y: py };
+
+            if (lastPoint) {
+                doc.line(lastPoint.x, lastPoint.y, px, py);
+            }
+            lastPoint = { x: px, y: py };
+            
+            // Dot
+            doc.circle(px, py, 1, 'F');
+        });
+        
+        // Close loop
+        if (lastPoint && firstPoint) {
+            doc.line(lastPoint.x, lastPoint.y, firstPoint.x, firstPoint.y);
+        }
+
+        yPos += 75; // Add space for chart
+    }
+
+    doc.setTextColor(0);
+    // --- ANALISIS CERDAS GEMINI AI SECTION ---
     if (audit.aiSummary) {
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
@@ -550,6 +721,26 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
       yPos += (summaryLines.length * 5) + 8;
     }
 
+    // AI Recommendations Section
+    if (audit.aiRecommendations && audit.aiRecommendations.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(t('report.recommendations'), 14, yPos);
+      yPos += 6;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      audit.aiRecommendations.forEach(rec => {
+         const cleanRec = rec.replace(/^[-*•]\s*/, ''); // Remove existing bullets if any
+         const bulletText = `• ${cleanRec}`;
+         const recLines = doc.splitTextToSize(bulletText, pageWidth - 28);
+         doc.text(recLines, 14, yPos);
+         yPos += (recLines.length * 5) + 2; 
+      });
+      yPos += 8;
+    }
+
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(t('report.details'), 14, yPos);
@@ -560,13 +751,13 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
       if (typeof autoTable === 'function') {
         autoTable(doc, {
           startY: yPos,
-          head: [[t('report.th.code'), t('new.label.std'), t('report.th.question'), t('report.th.status'), t('report.th.notes')]],
+          head: [[t('report.th.code'), t('dash.th.std'), t('report.th.question'), t('report.th.status'), t('report.th.notes')]],
           body: filteredQuestions.map(q => [
               q.id,
               q.category,
               q.questionText,
-              q.compliance || '-',
-              `Ev: ${q.evidence || '-'}\nNote: ${q.auditorNotes || '-'}`
+              getComplianceLabel(q.compliance),
+              `File: ${q.evidenceFileName || '-'}\nEv: ${q.evidence || '-'}\nNote: ${q.auditorNotes || '-'}`
           ]),
           headStyles: { fillColor: [30, 64, 175] },
           styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
@@ -578,6 +769,29 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
               4: { cellWidth: 'auto' }
           },
           alternateRowStyles: { fillColor: [248, 250, 252] },
+          // Create Hyperlinks for Evidence Column (Index 4)
+          didDrawCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 4) {
+               const rowIndex = data.row.index;
+               const q = filteredQuestions[rowIndex];
+
+               // Check if valid evidence URL exists
+               if (q && q.evidence && (q.evidence.startsWith('http') || q.evidence.startsWith('https'))) {
+                  // Create link annotation over the cell
+                  doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: q.evidence });
+               }
+            }
+          },
+          willDrawCell: (data: any) => {
+             // Optional: Highlight text blue to indicate it is clickable
+             if (data.section === 'body' && data.column.index === 4) {
+               const rowIndex = data.row.index;
+               const q = filteredQuestions[rowIndex];
+               if (q && q.evidence && (q.evidence.startsWith('http') || q.evidence.startsWith('https'))) {
+                 doc.setTextColor(37, 99, 235); // Blue-600
+               }
+             }
+          }
         });
       } else {
         console.error("autoTable is not a function", autoTable);
@@ -589,8 +803,6 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
 
     doc.save(`Laporan_AMI_${audit.department.replace(/\s+/g, '_')}.pdf`);
   };
-
-  if (!audit) return null;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in relative">
@@ -634,7 +846,7 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                   : 'bg-amber-50 text-amber-700 border-amber-100'
              }`}>
                 {audit.status === AuditStatus.COMPLETED ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                {audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Review Ka. Unit' : audit.status}
+                {getStatusLabel(audit.status)}
              </span>
              
              {canReopen && (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.SUBMITTED || audit.status === AuditStatus.REVIEW_DEPT_HEAD) && (
@@ -666,18 +878,18 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-8">
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Activity size={20} className="text-blue-600" /> Peta Ketercapaian Standar
+                  <Activity size={20} className="text-blue-600" /> {t('report.chart.radar')}
               </h3>
               <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                  % Kepatuhan per Kategori
+                  {t('report.chart.subtitle')}
               </span>
             </div>
-            <div className="flex justify-center">
+            <div className="flex justify-center w-full">
               <SimpleRadarChart data={radarData} />
             </div>
         </div>
         
-        {/* Details Table with Filters - MOVED UP */}
+        {/* Details Table with Filters */}
         <div className="mt-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
@@ -703,7 +915,7 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                   }`}
                 >
                   <XCircle size={14} />
-                  NC ({nonCompliantCount})
+                  {t('abbr.noncompliant')} ({nonCompliantCount})
                 </button>
 
                 <button 
@@ -715,7 +927,7 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                   }`}
                 >
                   <AlertCircle size={14} />
-                  OB ({observationCount})
+                  {t('abbr.observation')} ({observationCount})
                 </button>
 
                 <button 
@@ -727,12 +939,12 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                   }`}
                 >
                   <CheckCircle size={14} />
-                  C ({compliantCount})
+                  {t('abbr.compliant')} ({compliantCount})
                 </button>
               </div>
             </div>
           </div>
-
+          
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
@@ -758,18 +970,27 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
                           q.compliance === 'Non-Compliant' ? 'text-red-700 bg-red-50 border-red-100' :
                           q.compliance === 'Observation' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-400 bg-slate-100'
                         }`}>
-                          {q.compliance || '-'}
+                          {getComplianceLabel(q.compliance)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-600 text-xs align-top">
-                        {q.evidence || q.auditorNotes ? (
+                        {(q.evidence || q.evidenceFileName || q.auditorNotes) ? (
                           <div className="space-y-1">
-                            {q.evidence && (
+                            {(q.evidence || q.evidenceFileName) && (
                                <div className="flex items-start gap-1">
                                   <span className="font-semibold shrink-0">Ev:</span> 
-                                  <a href={getSafeUrl(q.evidence)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all flex items-center gap-0.5">
-                                    {q.evidence} <ExternalLink size={8} />
-                                  </a>
+                                  <button 
+                                     onClick={() => openLink(q.evidence!)}
+                                     className="text-blue-600 hover:underline break-all flex items-center gap-0.5 text-left"
+                                  >
+                                    {q.evidenceFileName ? (
+                                        <span className="flex items-center gap-1 font-mono bg-slate-100 px-1 rounded border border-slate-200">
+                                            <File size={10} /> {q.evidenceFileName}
+                                        </span>
+                                    ) : (
+                                        <span>{q.evidence} <ExternalLink size={8} /></span>
+                                    )}
+                                  </button>
                                </div>
                             )}
                             {q.auditorNotes && (
@@ -793,7 +1014,7 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
           </div>
         </div>
 
-        {/* AI Section - MOVED DOWN */}
+        {/* AI Section */}
         <div className="mt-10 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-10">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <Bot size={120} />
@@ -858,40 +1079,41 @@ export default function Reports({ audit, audits, onUpdateAudit, onSelectAudit, o
           </div>
         </div>
         
-        {/* REOPEN CONFIRMATION MODAL */}
-        {reopenDialog.isOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
-              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
-                <HelpCircle size={24} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Buka Kembali Audit?</h3>
-                <p className="text-sm text-slate-500">
-                  {t('report.reopenConfirm')}
-                </p>
-                <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
-                  <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button 
-                  onClick={() => setReopenDialog({ isOpen: false, audit: null })}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
-                >
-                  Batal
-                </button>
-                <button 
-                  onClick={executeReopen}
-                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
-                >
-                  Ya, Buka Kembali
-                </button>
+      </div>
+
+      {/* REOPEN CONFIRMATION MODAL - Moved outside content div for better stacking */}
+      {reopenDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+              <HelpCircle size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{t('report.btn.reopen')}?</h3>
+              <p className="text-sm text-slate-500">
+                {t('report.reopenConfirm')}
+              </p>
+              <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
+                <p className="text-xs text-amber-800 font-medium">Unit: {reopenDialog.audit?.department}</p>
               </div>
             </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setReopenDialog({ isOpen: false, audit: null })}
+                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+              >
+                {t('confirm.no')}
+              </button>
+              <button 
+                onClick={executeReopen}
+                className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors shadow-lg shadow-amber-900/20"
+              >
+                {t('confirm.yes')}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

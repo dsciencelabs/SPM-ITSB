@@ -1,14 +1,15 @@
-
 import { useState, FC } from 'react';
 import { AuditSession, AuditQuestion, AuditStatus, UserRole } from '../types';
 import { 
   Save, CheckCircle, Link as LinkIcon, 
   ChevronDown, ChevronUp, Search, Filter, FileText, 
   ExternalLink, Loader2, Building2, UserCheck, List,
-  ArrowRight, ChevronLeft, Calendar, Send, ShieldCheck, Clock
+  ArrowRight, ChevronLeft, Calendar, Send, ShieldCheck, Clock,
+  Upload, File, X, Eye
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { useAuth } from '../AuthContext';
+import { useNotification } from '../NotificationContext';
 
 interface AuditExecutionProps {
   audit: AuditSession | null;
@@ -20,7 +21,8 @@ interface AuditExecutionProps {
 
 const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit, onSelectAudit, onComplete }) => {
   const { t } = useLanguage();
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
+  const { addNotification } = useNotification();
   
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<'ALL' | 'UNFILLED'>('ALL');
@@ -28,15 +30,95 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
   const [listSearch, setListSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Helper to ensure URL works (adds https:// if missing)
-  const getSafeUrl = (url: string | undefined) => {
-    if (!url) return '#';
-    const trimmed = url.trim();
-    if (!trimmed) return '#';
-    if (trimmed.match(/^(http|https):\/\//)) {
-      return trimmed;
+  // --- HELPER TRANSLATIONS ---
+  const getComplianceLabel = (status: string | null) => {
+      if (!status) return '-';
+      if (status === 'Compliant') return t('exec.status.compliant');
+      if (status === 'Non-Compliant') return t('exec.status.noncompliant');
+      if (status === 'Observation') return t('exec.status.observation');
+      return status;
+  };
+
+  // --- FILE HANDLING HELPERS ---
+
+  // Helper to open evidence correctly
+  const openEvidence = (question: AuditQuestion) => {
+    const url = question.evidence;
+    if (!url) {
+        alert(t('alert.no_evidence'));
+        return;
     }
-    return `https://${trimmed}`;
+
+    try {
+        if (url.startsWith('data:')) {
+          // 1. Extract MIME type and Base64 data
+          const arr = url.split(',');
+          if (arr.length < 2) {
+             console.error("Invalid Data URI");
+             alert(t('alert.file_invalid'));
+             return;
+          }
+          
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+          
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+              u8arr[n] = bstr.charCodeAt(n);
+          }
+          
+          // 2. Create Blob and Object URL
+          const blob = new Blob([u8arr], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // 3. Create invisible link and click it (More reliable than window.open for blobs)
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.target = '_blank';
+          
+          // NOTE: Download attribute removed to ensure "Open in New Tab" behavior
+          // If we set download, it forces download. Without it, browser attempts to render (PDF/Img).
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Clean up
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        } else {
+          // Standard URL
+          let validUrl = url.trim();
+          if (!validUrl.match(/^(http|https):\/\//)) {
+             validUrl = `https://${validUrl}`;
+          }
+          
+          // Use Anchor click for URLs too to ensure consistent behavior
+          const link = document.createElement('a');
+          link.href = validUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+    } catch (e) {
+        console.error("Gagal membuka file:", e);
+        alert(t('alert.file_error'));
+    }
+  };
+  
+  const getStatusLabel = (status: AuditStatus) => {
+    switch(status) {
+        case AuditStatus.PENDING_SCHEDULING: return t('status.pending');
+        case AuditStatus.PLANNED: return t('status.planned');
+        case AuditStatus.IN_PROGRESS: return t('status.progress');
+        case AuditStatus.SUBMITTED: return t('status.submitted');
+        case AuditStatus.REVIEW_DEPT_HEAD: return t('status.review');
+        case AuditStatus.COMPLETED: return t('status.completed');
+        default: return status;
+    }
   };
 
   // --- VIEW 1: LIST VIEW (Jika belum ada audit yang dipilih) ---
@@ -76,15 +158,16 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                  <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                    <List className="text-blue-600" /> Daftar Pelaksanaan Audit
+                    <List className="text-blue-600" /> 
+                    {currentUser?.role === UserRole.AUDITEE ? 'Aktivitas Audit Unit Saya' : t('exec.list.title')}
                  </h2>
-                 <p className="text-slate-500 text-sm">Pilih audit di bawah ini untuk mulai mengisi kertas kerja atau melakukan verifikasi.</p>
+                 <p className="text-slate-500 text-sm">{t('exec.list.subtitle')}</p>
               </div>
               <div className="relative w-full md:w-64">
                  <Search size={18} className="absolute left-3 top-2.5 text-slate-400" />
                  <input 
                    type="text" 
-                   placeholder="Cari Unit / Nama Audit..."
+                   placeholder={t('exec.search')}
                    value={listSearch}
                    onChange={(e) => setListSearch(e.target.value)}
                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -94,12 +177,25 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 pb-20">
+           {/* Welcome Banner for Auditee - Moved from Dashboard */}
+           {currentUser?.role === UserRole.AUDITEE && (
+            <div className="max-w-7xl mx-auto mb-6">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-amber-800">
+                <Building2 size={24} />
+                <div>
+                  <p className="font-bold">{t('dash.welcome.auditee')} {currentUser.department}</p>
+                  <p className="text-sm">{t('dash.welcome.auditee.msg')}</p>
+                </div>
+              </div>
+            </div>
+           )}
+
            <div className="max-w-7xl mx-auto space-y-4">
               {actionableAudits.length === 0 ? (
                  <div className="text-center py-12 bg-white rounded-xl border border-slate-200 shadow-sm">
                     <CheckCircle size={48} className="mx-auto mb-3 text-slate-300" />
-                    <h3 className="text-lg font-bold text-slate-700">Tidak ada audit aktif</h3>
-                    <p className="text-slate-500">Semua tugas audit telah selesai atau belum dijadwalkan.</p>
+                    <h3 className="text-lg font-bold text-slate-700">{t('exec.no_active')}</h3>
+                    <p className="text-slate-500">{t('exec.no_active_msg')}</p>
                  </div>
               ) : (
                  actionableAudits.map(a => {
@@ -141,7 +237,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                              <div className="flex items-center gap-6 w-full md:w-auto">
                                 <div className="flex-1 md:w-48">
                                    <div className="flex justify-between text-xs mb-1 font-bold text-slate-500">
-                                      <span>Progress</span>
+                                      <span>{t('exec.progress')}</span>
                                       <span>{percent}%</span>
                                    </div>
                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -173,10 +269,49 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
     setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleUpdateQuestion = (index: number, field: keyof AuditQuestion, value: string | null) => {
+  const handleUpdateQuestion = (index: number, updates: Partial<AuditQuestion>) => {
     const updatedQuestions = [...audit.questions];
-    updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
+    updatedQuestions[index] = { ...updatedQuestions[index], ...updates };
     onUpdateAudit({ ...audit, questions: updatedQuestions });
+  };
+
+  const handleFileUpload = (index: number, question: AuditQuestion, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validation
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      alert(t('alert.file_too_big'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        // Logic for "Structured Folder" requirement (Simulation)
+        const date = new Date().toISOString().split('T')[0];
+        const cleanCategory = question.category.replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanId = question.id.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        // Virtual Path Structure to Display
+        const virtualPath = `uploads/${date}/${cleanCategory}/${cleanId}/${file.name}`;
+        
+        // Save Base64 Data AND The Virtual Path
+        handleUpdateQuestion(index, {
+            evidence: event.target.result as string,
+            evidenceFileName: virtualPath
+        });
+        
+        alert(t('exec.alert.upload_success') + `\n\nDisimpan secara terstruktur di:\n${virtualPath}`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearFile = (index: number) => {
+    if(window.confirm(t('confirm.delete'))) {
+        handleUpdateQuestion(index, { evidence: "", evidenceFileName: "" });
+    }
   };
 
   const handleSave = async () => {
@@ -187,20 +322,69 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
   };
 
   const handleCompletion = () => {
+    // 1. AUDITEE SUBMITS TO AUDITOR
     if (isAuditee && audit.status === AuditStatus.IN_PROGRESS) {
-      if (window.confirm("Submit self-assessment? Auditor will be notified.")) {
+      if (window.confirm(t('exec.alert.submit_auditee'))) {
         onUpdateAudit({ ...audit, status: AuditStatus.SUBMITTED });
+        
+        // Notify Assigned Auditor
+        if (audit.assignedAuditorId) {
+           addNotification(
+             audit.assignedAuditorId,
+             "Self-Assessment Dikirim",
+             `Unit ${audit.department} telah mengirimkan self-assessment. Mohon lakukan verifikasi.`,
+             "INFO"
+           );
+        }
       }
-    } else if (isAuditor && audit.status === AuditStatus.SUBMITTED) {
-       if (window.confirm("Finish verification? Report will be sent to Dept Head for review.")) {
+    } 
+    // 2. AUDITOR SUBMITS TO DEPT HEAD (VERIFICATION)
+    else if (isAuditor && (audit.status === AuditStatus.SUBMITTED || audit.status === AuditStatus.IN_PROGRESS)) {
+       if (window.confirm(t('exec.alert.submit_auditor'))) {
          onUpdateAudit({ ...audit, status: AuditStatus.REVIEW_DEPT_HEAD });
+
+         // Notify Dept Head
+         const deptHeads = users.filter(u => u.department === audit.department && u.role === UserRole.DEPT_HEAD);
+         if (deptHeads.length > 0) {
+            deptHeads.forEach(dh => {
+                addNotification(
+                  dh.id,
+                  "Verifikasi Audit Selesai",
+                  `Auditor telah menyelesaikan verifikasi untuk ${audit.department}. Mohon review dan setujui hasil audit.`,
+                  "WARNING"
+                );
+            });
+         }
        }
-    } else if (currentUser?.role === UserRole.DEPT_HEAD && audit.status === AuditStatus.REVIEW_DEPT_HEAD) {
-       if (window.confirm("Approve Audit Result? Audit will be marked as Completed.")) {
+    } 
+    // 3. DEPT HEAD APPROVES (COMPLETION)
+    else if (currentUser?.role === UserRole.DEPT_HEAD && audit.status === AuditStatus.REVIEW_DEPT_HEAD) {
+       if (window.confirm(t('exec.alert.approve_dept'))) {
          onComplete();
+
+         // Notify Auditee and Auditor of Completion
+         if (audit.assignedAuditorId) {
+            addNotification(
+              audit.assignedAuditorId,
+              "Audit Selesai",
+              `Audit untuk ${audit.department} telah disetujui dan dinyatakan Selesai.`,
+              "SUCCESS"
+            );
+         }
+         
+         const auditees = users.filter(u => u.department === audit.department && u.role === UserRole.AUDITEE);
+         auditees.forEach(a => {
+            addNotification(
+              a.id,
+              "Audit Selesai",
+              `Proses audit untuk ${audit.department} telah selesai sepenuhnya.`,
+              "SUCCESS"
+            );
+         });
        }
     } else {
-       if (window.confirm(t('exec.confirm'))) {
+       // Generic completion for Admin/Fallback
+       if (window.confirm(t('confirm.action'))) {
           onComplete();
        }
     }
@@ -240,7 +424,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
              onClick={() => onSelectAudit(null)}
              className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-medium mb-3 transition-colors"
           >
-             <ChevronLeft size={16} /> Kembali ke Daftar
+             <ChevronLeft size={16} /> {t('exec.btn.back')}
           </button>
 
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -259,7 +443,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                          audit.status === AuditStatus.IN_PROGRESS ? 'text-amber-600' :
                          audit.status === AuditStatus.SUBMITTED ? 'text-purple-600' :
                          audit.status === AuditStatus.COMPLETED ? 'text-green-600' : 'text-slate-600'
-                      }`}>{audit.status}</span>
+                      }`}>{getStatusLabel(audit.status)}</span>
                    </div>
                 </div>
              </div>
@@ -289,9 +473,9 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2"
                  >
                    <CheckCircle size={16} />
-                   {isAuditee && audit.status === AuditStatus.IN_PROGRESS ? 'Submit Assessment' : 
-                    isAuditor && audit.status === AuditStatus.SUBMITTED ? 'Verify & Send' : 
-                    currentUser?.role === UserRole.DEPT_HEAD && audit.status === AuditStatus.REVIEW_DEPT_HEAD ? 'Approve' :
+                   {isAuditee && audit.status === AuditStatus.IN_PROGRESS ? t('exec.btn.submit_assess') : 
+                    isAuditor && (audit.status === AuditStatus.SUBMITTED || audit.status === AuditStatus.IN_PROGRESS) ? t('exec.btn.verify_send') : 
+                    currentUser?.role === UserRole.DEPT_HEAD && audit.status === AuditStatus.REVIEW_DEPT_HEAD ? t('exec.btn.approve') :
                     t('exec.btn.complete')}
                  </button>
              </div>
@@ -304,7 +488,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
             <Search size={18} className="absolute left-3 top-2.5 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search questions..."
+              placeholder={t('exec.search_placeholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -316,13 +500,13 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                onClick={() => setFilter('ALL')}
                className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${filter === 'ALL' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-               All
+               {t('exec.filter.all')}
             </button>
             <button 
                onClick={() => setFilter('UNFILLED')}
                className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${filter === 'UNFILLED' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-               Unfilled
+               {t('exec.filter.unfilled')}
             </button>
          </div>
       </div>
@@ -332,7 +516,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
          {Object.keys(groupedQuestions).length === 0 ? (
              <div className="text-center py-12 text-slate-400 px-6">
                 <Filter size={48} className="mx-auto mb-3 opacity-20" />
-                <p>No questions match your filter.</p>
+                <p>{t('exec.no_match')}</p>
              </div>
          ) : (
             Object.entries(groupedQuestions).map(([category, questions]) => (
@@ -343,7 +527,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                          {category}
                       </h3>
-                      <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                      <span className="text--[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
                          {questions.length}
                       </span>
                   </div>
@@ -374,7 +558,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                                             q.compliance === 'Non-Compliant' ? 'bg-red-50 text-red-700 border-red-100' :
                                             'bg-amber-50 text-amber-700 border-amber-100'
                                          }`}>
-                                            Auditor: {q.compliance}
+                                            Auditor: {getComplianceLabel(q.compliance)}
                                          </span>
                                        )}
                                        {q.auditeeSelfAssessment && (
@@ -383,7 +567,7 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                                             q.auditeeSelfAssessment === 'Non-Compliant' ? 'bg-red-50 text-red-700 border-red-100' :
                                             'bg-amber-50 text-amber-700 border-amber-100'
                                          }`}>
-                                            Self: {q.auditeeSelfAssessment}
+                                            Self: {getComplianceLabel(q.auditeeSelfAssessment)}
                                          </span>
                                        )}
                                     </div>
@@ -399,111 +583,161 @@ const AuditExecution: FC<AuditExecutionProps> = ({ audit, audits, onUpdateAudit,
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                        
                                        {/* LEFT: AUDITEE SECTION */}
-                                       <div className={`space-y-4 ${!isAuditee && 'opacity-80 pointer-events-none'}`}>
+                                       <div className={`space-y-4 ${!isAuditee ? 'opacity-90' : ''}`}>
                                           <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
-                                             <Building2 size={14} /> Auditee Self Assessment
+                                             <Building2 size={14} /> {t('exec.label.self_eval')}
                                           </h4>
                                           
                                           <div className="space-y-2">
-                                             <label className="text-sm font-medium text-slate-700">Self Assessment (Klaim)</label>
+                                             <label className="text-sm font-medium text-slate-700">{t('exec.label.claim')}</label>
                                              <div className="flex gap-2">
                                                 {['Compliant', 'Observation', 'Non-Compliant'].map((status) => (
                                                    <button
                                                       key={status}
-                                                      onClick={() => isAuditee && handleUpdateQuestion(realIndex, 'auditeeSelfAssessment', status as any)}
+                                                      disabled={!isAuditee}
+                                                      onClick={() => isAuditee && handleUpdateQuestion(realIndex, { auditeeSelfAssessment: status as any })}
                                                       className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
                                                          q.auditeeSelfAssessment === status 
                                                             ? status === 'Compliant' ? 'bg-green-600 text-white border-green-600' :
                                                               status === 'Non-Compliant' ? 'bg-red-600 text-white border-red-600' :
                                                               'bg-amber-500 text-white border-amber-500'
-                                                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed'
                                                       }`}
                                                    >
-                                                      {status}
+                                                      {getComplianceLabel(status)}
                                                    </button>
                                                 ))}
                                              </div>
                                           </div>
 
                                           <div className="space-y-2">
-                                             <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
-                                                <span>Bukti / Evidence (URL)</span>
+                                             <label className="text-sm font-medium text-slate-700 flex items-center justify-between mb-1.5 gap-2">
+                                                <span>{t('exec.label.evidence')}</span>
                                                 {q.evidence && (
-                                                   <a 
-                                                      href={getSafeUrl(q.evidence)} 
-                                                      target="_blank" 
-                                                      rel="noreferrer" 
-                                                      onClick={(e) => e.stopPropagation()}
-                                                      className="text-xs text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 hover:bg-blue-100"
+                                                   <button 
+                                                      onClick={(e) => { e.stopPropagation(); openEvidence(q); }}
+                                                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 hover:bg-blue-100 transition-colors cursor-pointer"
+                                                      style={{ pointerEvents: 'auto' }}
                                                     >
-                                                      <ExternalLink size={10} /> Open Link
-                                                   </a>
+                                                      <Eye size={12} /> {t('exec.btn.open_file')}
+                                                   </button>
                                                 )}
                                              </label>
-                                             <div className="relative">
-                                                <LinkIcon size={16} className="absolute left-3 top-3 text-slate-400" />
-                                                <input 
-                                                   type="text" 
-                                                   disabled={!isAuditee}
-                                                   value={q.evidence || ''}
-                                                   onChange={(e) => handleUpdateQuestion(realIndex, 'evidence', e.target.value)}
-                                                   className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                                   placeholder="https://drive.google.com/..."
-                                                />
+                                             
+                                             <div className="flex gap-2 items-stretch">
+                                                <div className="relative flex-1 min-w-0">
+                                                    {q.evidenceFileName ? (
+                                                       <div 
+                                                          onClick={(e) => { e.stopPropagation(); openEvidence(q); }}
+                                                          className="w-full flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-600 cursor-pointer hover:bg-slate-100 transition-colors group/file"
+                                                          title="Klik untuk melihat file"
+                                                          style={{ pointerEvents: 'auto' }}
+                                                       >
+                                                          <File size={16} className="shrink-0 text-blue-500 group-hover/file:scale-110 transition-transform" />
+                                                          <span className="truncate flex-1 font-mono text-xs">{q.evidenceFileName}</span>
+                                                          {isAuditee && (
+                                                            <button 
+                                                              onClick={(e) => { e.stopPropagation(); handleClearFile(realIndex); }} 
+                                                              className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded"
+                                                              title="Hapus file"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                          )}
+                                                       </div>
+                                                    ) : (
+                                                       <>
+                                                          <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                          <input 
+                                                            type="text" 
+                                                            disabled={!isAuditee}
+                                                            value={q.evidence || ''}
+                                                            onChange={(e) => handleUpdateQuestion(realIndex, { evidence: e.target.value })}
+                                                            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                                                            placeholder={t('exec.placeholder.evidence')}
+                                                          />
+                                                       </>
+                                                    )}
+                                                </div>
+                                                
+                                                {isAuditee && (
+                                                    <>
+                                                        <input 
+                                                            type="file" 
+                                                            id={`upload-${q.id}`}
+                                                            className="hidden"
+                                                            accept="image/*,application/pdf"
+                                                            onChange={(e) => handleFileUpload(realIndex, q, e)}
+                                                        />
+                                                        <label 
+                                                            htmlFor={`upload-${q.id}`}
+                                                            className="flex items-center justify-center px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg border border-blue-200 cursor-pointer transition-colors shadow-sm h-full whitespace-nowrap"
+                                                            title="Upload File"
+                                                        >
+                                                            <Upload size={18} />
+                                                        </label>
+                                                    </>
+                                                )}
                                              </div>
+                                             {isAuditee && !q.evidenceFileName && (
+                                                 <p className="text-[10px] text-slate-400">
+                                                    {t('exec.help.upload')}
+                                                 </p>
+                                             )}
                                           </div>
                                           
                                           {(q.auditeeSelfAssessment === 'Non-Compliant' || q.compliance === 'Non-Compliant') && (
                                               <div className="space-y-2 pt-2">
-                                                 <label className="text-sm font-medium text-slate-700">Rencana Tindak Lanjut (Action Plan)</label>
+                                                 <label className="text-sm font-medium text-slate-700">{t('exec.label.action_plan')}</label>
                                                  <textarea 
                                                     disabled={!isAuditee}
                                                     rows={2}
                                                     value={q.actionPlan || ''}
-                                                    onChange={(e) => handleUpdateQuestion(realIndex, 'actionPlan', e.target.value)}
-                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                                    placeholder="Jelaskan rencana perbaikan..."
+                                                    onChange={(e) => handleUpdateQuestion(realIndex, { actionPlan: e.target.value })}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none disabled:bg-slate-50 disabled:text-slate-500"
+                                                    placeholder={t('exec.placeholder.action')}
                                                  />
                                               </div>
                                           )}
                                        </div>
 
                                        {/* RIGHT: AUDITOR SECTION */}
-                                       <div className={`space-y-4 pl-0 lg:pl-8 lg:border-l border-slate-100 ${!isAuditor && 'opacity-80 pointer-events-none'}`}>
+                                       <div className={`space-y-4 pl-0 lg:pl-8 lg:border-l border-slate-100 ${!isAuditor ? 'opacity-90' : ''}`}>
                                           <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
-                                             <UserCheck size={14} /> Auditor Verification
+                                             <UserCheck size={14} /> {t('exec.label.verification')}
                                           </h4>
 
                                           <div className="space-y-2">
-                                             <label className="text-sm font-medium text-slate-700">Auditor Verdict</label>
+                                             <label className="text-sm font-medium text-slate-700">{t('exec.label.verdict')}</label>
                                              <div className="flex gap-2">
                                                 {['Compliant', 'Observation', 'Non-Compliant'].map((status) => (
                                                    <button
                                                       key={status}
-                                                      onClick={() => isAuditor && handleUpdateQuestion(realIndex, 'compliance', status as any)}
+                                                      disabled={!isAuditor}
+                                                      onClick={() => isAuditor && handleUpdateQuestion(realIndex, { compliance: status as any })}
                                                       className={`flex-1 py-2 text-xs font-bold rounded-lg border transition-all ${
                                                          q.compliance === status 
                                                             ? status === 'Compliant' ? 'bg-green-600 text-white border-green-600 shadow-md ring-2 ring-green-100' :
                                                               status === 'Non-Compliant' ? 'bg-red-600 text-white border-red-600 shadow-md ring-2 ring-red-100' :
                                                               'bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-100'
-                                                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed'
                                                       }`}
                                                    >
-                                                      {status}
+                                                      {getComplianceLabel(status)}
                                                    </button>
                                                 ))}
                                              </div>
                                           </div>
 
                                           <div className="space-y-2">
-                                             <label className="text-sm font-medium text-slate-700">Catatan Auditor</label>
+                                             <label className="text-sm font-medium text-slate-700">{t('exec.label.notes')}</label>
                                              <textarea 
                                                 disabled={!isAuditor}
                                                 rows={3}
                                                 value={q.auditorNotes || ''}
-                                                onChange={(e) => handleUpdateQuestion(realIndex, 'auditorNotes', e.target.value)}
-                                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50 focus:bg-white transition-colors"
-                                                placeholder="Tuliskan temuan atau observasi..."
+                                                onChange={(e) => handleUpdateQuestion(realIndex, { auditorNotes: e.target.value })}
+                                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50 focus:bg-white transition-colors disabled:bg-slate-100 disabled:text-slate-500"
+                                                placeholder={t('exec.placeholder.notes')}
                                              />
                                           </div>
                                        </div>

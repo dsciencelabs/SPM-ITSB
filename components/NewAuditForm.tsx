@@ -15,7 +15,7 @@ interface NewAuditFormProps {
 }
 
 const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { currentUser, users } = useAuth();
   const { units, questions: masterQuestions } = useMasterData(); 
   const { settings } = useSettings();
@@ -56,10 +56,10 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 mb-4">
           <Lock size={32} />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Akses Ditolak</h2>
-        <p className="text-slate-500 mb-6">Anda tidak memiliki izin untuk membuat Penugasan Audit baru.</p>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">{t('new.access_denied')}</h2>
+        <p className="text-slate-500 mb-6">{t('new.access_msg')}</p>
         <button onClick={onCancel} className="bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900">
-          Kembali ke Dashboard
+          {t('new.btn.back')}
         </button>
       </div>
     );
@@ -165,7 +165,8 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
         setSourceType('MASTER');
         setStep(2);
       } else {
-        const questions = await generateChecklist(standard, department);
+        // Pass language to ensure checklist is generated in correct language
+        const questions = await generateChecklist(standard, department, language);
         setDraftQuestions(questions);
         setSourceType('AI');
         setStep(2);
@@ -305,7 +306,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
               <p className="text-slate-500 text-sm">
                 {step === 1 
                   ? `Periode Audit: ${settings.auditPeriod} • Konfigurasi Penugasan` 
-                  : "Pastikan pertanyaan sesuai dengan instrumen baku."}
+                  : t('new.editor.subtitle')}
               </p>
             </div>
           </div>
@@ -333,7 +334,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                 {/* 1. STANDARD SELECTION */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-3">
-                    1. Pilih Standar Instrumen (Wajib)
+                    {t('new.label.std')}
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Object.values(AuditStandard).map((std) => {
@@ -375,7 +376,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="block text-sm font-medium text-slate-700">
-                          2. Pilih Auditee (Unit/Prodi)
+                          {t('new.label.unit')}
                         </label>
                         {standard && (
                           <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
@@ -393,7 +394,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                         <option value="">
                           {filteredUnits.length === 0 
                             ? "-- Tidak ada unit yang sesuai --" 
-                            : "-- Pilih Unit / Program Studi --"}
+                            : t('new.placeholder.unit')}
                         </option>
                         {filteredUnits.map(unit => (
                           <option key={unit.id} value={unit.name}>
@@ -406,7 +407,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                     {/* 3. AUDITOR SELECTION (MANDATORY) */}
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        3. Penugasan Auditor (Semua User Aktif)
+                        {t('new.label.auditor')}
                       </label>
                       <div className="relative">
                         <select
@@ -416,7 +417,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                           className="w-full px-4 py-3 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
                           disabled={!department}
                         >
-                          <option value="">-- Pilih Auditor --</option>
+                          <option value="">{t('new.placeholder.auditor')}</option>
                           {activeAuditors.map(user => (
                             <option key={user.id} value={user.id}>
                               {user.name} ({user.role})
@@ -428,7 +429,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                       {department && (
                         <div className="mt-2 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
                           <UserX size={14} />
-                          <span><strong>Info:</strong> Auditor yang berasal dari departemen <strong>{department}</strong> tidak ditampilkan (Conflict of Interest).</span>
+                          <span>{t('new.warn.conflict')}</span>
                         </div>
                       )}
                     </div>
@@ -438,7 +439,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                 <div className="space-y-6 border-t border-slate-100 pt-6">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        4. Nama Penugasan Audit (Wajib)
+                        {t('new.label.name')}
                       </label>
                       <div className="relative">
                           <input 
@@ -455,7 +456,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                     
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        5. Deskripsi / Catatan Penugasan (Opsional)
+                        {t('new.label.desc')}
                       </label>
                       <div className="relative">
                           <textarea 
@@ -487,7 +488,7 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                     {isLoading ? (
                       <>
                         <Loader2 size={18} className="animate-spin" />
-                        Memuat Instrumen...
+                        {t('new.btn.generate')}
                       </>
                     ) : (
                       <>
@@ -685,17 +686,17 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                       <Send size={28} className="text-white" />
                    </div>
                    <div>
-                      <h3 className="text-xl font-bold">Konfirmasi Penugasan</h3>
-                      <p className="text-blue-100 text-sm mt-1 leading-tight">Penugasan akan dikirim ke Kepala Unit untuk persetujuan jadwal.</p>
+                      <h3 className="text-xl font-bold">{t('new.confirm.title')}</h3>
+                      <p className="text-blue-100 text-sm mt-1 leading-tight">{t('new.confirm.msg')}</p>
                    </div>
                 </div>
              </div>
              
              <div className="p-6 space-y-4">
                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-amber-800">
-                   <p className="font-bold flex items-center gap-2 mb-1"><AlertTriangle size={16} /> Menunggu Konfirmasi Dept. Head</p>
+                   <p className="font-bold flex items-center gap-2 mb-1"><AlertTriangle size={16} /> {t('new.confirm.wait')}</p>
                    <p className="text-xs">
-                     Audit tidak akan dimulai (In Progress) sampai Kepala Unit menyetujui jadwal dan penugasan ini.
+                     {t('new.confirm.wait_msg')}
                    </p>
                 </div>
 
@@ -735,14 +736,14 @@ const NewAuditForm: FC<NewAuditFormProps> = ({ onAuditCreated, onCancel }) => {
                      onClick={() => setSubmitModalOpen(false)}
                      className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
                    >
-                     Batal
+                     {t('new.btn.cancel')}
                    </button>
                    <button 
                      onClick={executeSubmitAudit}
                      className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                    >
                      <Send size={18} />
-                     Ya, Kirim Penugasan
+                     {t('new.btn.finalize')}
                    </button>
                 </div>
              </div>

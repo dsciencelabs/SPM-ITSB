@@ -125,7 +125,12 @@ const UserManagementView: FC = () => {
                       </td>
                       <td className="px-6 py-3"><span className="px-2 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">{user.role}</span></td>
                       <td className="px-6 py-3 text-slate-500">{user.department || '-'}</td>
-                      <td className="px-6 py-3"><span className={`flex items-center gap-1 text-xs font-bold ${user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}`}><span className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>{user.status}</span></td>
+                      <td className="px-6 py-3">
+                         <span className={`flex items-center gap-1 text-xs font-bold ${user.status === 'Active' ? 'text-green-600' : 'text-slate-400'}`}>
+                           <span className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                           {user.status === 'Active' ? t('status.user_active') : t('status.user_inactive')}
+                         </span>
+                      </td>
                       <td className="px-6 py-3 text-right">
                          {user.role === UserRole.SUPER_ADMIN && currentUser?.role !== UserRole.SUPER_ADMIN ? (
                             <span className="text-xs text-slate-400 italic px-2 py-1 bg-slate-100 rounded border"><Lock size={10} className="inline mr-1"/>Protected</span>
@@ -175,16 +180,25 @@ const UserManagementView: FC = () => {
                    <Info size={16} className="mt-0.5 shrink-0" />
                    <div><span className="font-bold block mb-0.5">Role Permission: {form.role}</span><span>{getRoleDescription(form.role)}</span></div>
                  </div>
-                 <div className="flex gap-4 items-center"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={form.status === 'Active'} onChange={() => setForm({...form, status: 'Active'})} /><span className="text-green-600 font-medium">Active</span></label><label className="flex items-center gap-2 text-sm"><input type="radio" checked={form.status === 'Inactive'} onChange={() => setForm({...form, status: 'Inactive'})} /><span className="text-slate-500">Inactive</span></label></div>
+                 <div className="flex gap-4 items-center">
+                    <label className="flex items-center gap-2 text-sm">
+                        <input type="radio" checked={form.status === 'Active'} onChange={() => setForm({...form, status: 'Active'})} />
+                        <span className="text-green-600 font-medium">{t('status.user_active')}</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                        <input type="radio" checked={form.status === 'Inactive'} onChange={() => setForm({...form, status: 'Inactive'})} />
+                        <span className="text-slate-500">{t('status.user_inactive')}</span>
+                    </label>
+                 </div>
                  <div className="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-sm">{t('mgmt.btn.cancel')}</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">{isEditing ? t('mgmt.btn.update') : t('mgmt.btn.save')}</button></div>
               </form>
             </div>
           </div>
        )}
        
-       {confirmModal && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold">Konfirmasi?</h3><div className="flex gap-3 pt-2"><button onClick={() => setConfirmModal(false)} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">Batal</button><button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Ya</button></div></div></div>}
-       {deactivateModal.open && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold">Nonaktifkan?</h3><div className="flex gap-3 pt-2"><button onClick={() => setDeactivateModal({open: false, user: null})} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">Batal</button><button onClick={() => { updateUser({...deactivateModal.user!, status: 'Inactive'}); setDeactivateModal({open: false, user: null}); }} className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm">Ya</button></div></div></div>}
-       {deleteModal.open && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold text-red-600">{t('mgmt.del.title')}</h3><div className="flex gap-3 pt-2"><button onClick={() => setDeleteModal({open: false, userId: null, userName: ''})} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">Batal</button><button onClick={() => { if(deleteModal.userId) deleteUser(deleteModal.userId); setDeleteModal({open: false, userId: null, userName: ''}); }} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Hapus</button></div></div></div>}
+       {confirmModal && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold">{t('confirm.general')}</h3><div className="flex gap-3 pt-2"><button onClick={() => setConfirmModal(false)} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">{t('confirm.no')}</button><button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">{t('confirm.yes')}</button></div></div></div>}
+       {deactivateModal.open && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold">Ubah Status?</h3><div className="flex gap-3 pt-2"><button onClick={() => setDeactivateModal({open: false, user: null})} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">{t('confirm.no')}</button><button onClick={() => { updateUser({...deactivateModal.user!, status: 'Inactive'}); setDeactivateModal({open: false, user: null}); }} className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm">{t('confirm.yes')}</button></div></div></div>}
+       {deleteModal.open && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center space-y-4"><h3 className="text-lg font-bold text-red-600">{t('mgmt.del.title')}</h3><div className="flex gap-3 pt-2"><button onClick={() => setDeleteModal({open: false, userId: null, userName: ''})} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm">{t('mgmt.btn.cancel')}</button><button onClick={() => { if(deleteModal.userId) deleteUser(deleteModal.userId); setDeleteModal({open: false, userId: null, userName: ''}); }} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">{t('mgmt.del.confirm')}</button></div></div></div>}
     </div>
   );
 };

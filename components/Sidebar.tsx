@@ -23,7 +23,8 @@ import {
   Loader2,
   Camera,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calculator
 } from 'lucide-react';
 import { ViewState, UserRole } from '../types';
 import { useLanguage } from '../LanguageContext';
@@ -175,48 +176,61 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
       case UserRole.SUPER_ADMIN:
         return [
           ...base,
-          { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock }, 
-          { id: 'USER_MGMT', label: 'User Management', icon: Users },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox },
-          { id: 'MASTER_DATA', label: 'Unit Kerja', icon: Database },
+          { id: 'AUDIT_SCHEDULE', label: t('nav.schedule'), icon: CalendarClock }, 
+          { id: 'USER_MGMT', label: t('nav.userMgmt'), icon: Users },
+          { id: 'TEMPLATE_MGMT', label: t('nav.template'), icon: FileBox },
+          { id: 'MASTER_DATA', label: t('nav.master'), icon: Database },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'AUDIT_EXECUTION', label: 'All Audits (Exec)', icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart },
-          { id: 'SETTINGS', label: 'System Settings', icon: Settings },
+          { id: 'AUDIT_EXECUTION', label: t('nav.all_exec'), icon: ClipboardList },
+          { id: 'REPORT', label: t('nav.report'), icon: PieChart },
+          { id: 'SETTINGS', label: t('nav.settings'), icon: Settings },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
         ];
       
       case UserRole.ADMIN:
         return [
           ...base,
-          { id: 'AUDIT_SCHEDULE', label: 'Audit Schedule', icon: CalendarClock },
-          { id: 'TEMPLATE_MGMT', label: 'Instrumen Audit', icon: FileBox }, 
+          { id: 'AUDIT_SCHEDULE', label: t('nav.schedule'), icon: CalendarClock },
+          { id: 'TEMPLATE_MGMT', label: t('nav.template'), icon: FileBox }, 
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: t('nav.execution'), icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart },
+          { id: 'REPORT', label: t('nav.report'), icon: PieChart },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
         ];
 
       case UserRole.AUDITOR_LEAD:
         return [
           ...base,
-          { id: 'AUDIT_SCHEDULE', label: 'Jadwal & Penugasan', icon: CalendarClock },
+          { id: 'AUDIT_SCHEDULE', label: t('nav.schedule'), icon: CalendarClock },
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
-          { id: 'AUDIT_EXECUTION', label: 'All Active Audits', icon: ClipboardList },
-          { id: 'REPORT', label: 'All Reports', icon: PieChart },
+          { id: 'AUDIT_EXECUTION', label: t('nav.all_active'), icon: ClipboardList },
+          { id: 'REPORT', label: t('nav.report'), icon: PieChart },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
         ];
 
       case UserRole.AUDITOR:
         return [
           ...base,
-          { id: 'AUDIT_EXECUTION', label: 'My Assignments (Active)', icon: ClipboardList },
-          { id: 'REPORT', label: 'My Reports (History)', icon: PieChart },
+          { id: 'AUDIT_EXECUTION', label: t('nav.my_assign'), icon: ClipboardList },
+          { id: 'REPORT', label: t('nav.my_reports'), icon: PieChart },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
         ];
       
       case UserRole.DEPT_HEAD:
-      case UserRole.AUDITEE:
         return [
           ...base,
-          { id: 'AUDIT_EXECUTION', label: 'My Audits (Action)', icon: ClipboardList },
-          { id: 'REPORT', label: 'Dept Reports', icon: PieChart },
+          { id: 'AUDIT_EXECUTION', label: t('nav.my_audits'), icon: ClipboardList },
+          { id: 'REPORT', label: t('nav.dept_reports'), icon: PieChart },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
+        ];
+
+      case UserRole.AUDITEE:
+        // EXPLICITLY REMOVE DASHBOARD FOR AUDITEE
+        // Auditee starts directly at Audit Execution
+        return [
+          { id: 'AUDIT_EXECUTION', label: t('nav.my_audits'), icon: ClipboardList },
+          { id: 'REPORT', label: t('nav.dept_reports'), icon: PieChart },
+          { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
         ];
         
       default:
