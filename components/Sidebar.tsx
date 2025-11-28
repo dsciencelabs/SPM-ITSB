@@ -1,3 +1,4 @@
+
 import { useState, FC, useRef, useEffect, FormEvent, ChangeEvent } from 'react';
 import { 
   LayoutDashboard, 
@@ -183,8 +184,8 @@ const Sidebar: FC<SidebarProps> = ({ currentView, setCurrentView, isCollapsed, t
           { id: 'NEW_AUDIT', label: t('nav.newAudit'), icon: FilePlus },
           { id: 'AUDIT_EXECUTION', label: t('nav.all_exec'), icon: ClipboardList },
           { id: 'REPORT', label: t('nav.report'), icon: PieChart },
-          { id: 'SETTINGS', label: t('nav.settings'), icon: Settings },
           { id: 'SIMULATION', label: 'Simulasi Nilai', icon: Calculator }, 
+          { id: 'SETTINGS', label: t('nav.settings'), icon: Settings }, // Moved to bottom
         ];
       
       case UserRole.ADMIN:

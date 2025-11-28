@@ -1,3 +1,4 @@
+
 import { useState, useEffect, FC } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -14,7 +15,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { MasterDataProvider } from './MasterDataContext';
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { NotificationProvider } from './NotificationContext';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, ChevronUp, ChevronDown } from 'lucide-react';
 
 // Mock Data for initial visualization
 const MOCK_AUDITS: AuditSession[] = [
@@ -260,6 +261,9 @@ const AppContent: FC = () => {
   
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Footer State - HOVER Mode
+  const [isFooterExpanded, setIsFooterExpanded] = useState(false);
   
   // Scroll to Top State
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -432,7 +436,7 @@ const AppContent: FC = () => {
         {/* Back to Top Button */}
         <button
           onClick={scrollToTop}
-          className={`fixed bottom-8 right-8 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg transition-all duration-300 transform hover:bg-blue-700 hover:scale-110 cd-top ${
+          className={`fixed bottom-12 right-8 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg transition-all duration-300 transform hover:bg-blue-700 hover:scale-110 cd-top ${
             showScrollTop ? 'cd-is-visible opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
           }`}
           aria-label="Back to top"
@@ -440,16 +444,36 @@ const AppContent: FC = () => {
           <ArrowUp size={24} />
         </button>
 
-        {/* Auto-Hide Footer - Optimized for Full Page Usage */}
-        {/* Flex-none + Shrink-0 prevents flex overlap issues */}
-        <footer className="flex-none shrink-0 z-40 bg-white border-t border-slate-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] group overflow-hidden transition-[max-height] duration-500 ease-in-out max-h-[14px] hover:max-h-[220px]">
-            {/* Minimal Trigger Strip */}
-            <div className="h-[14px] w-full flex items-center justify-center cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-100">
-               <div className="w-20 h-1 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors"></div>
+        {/* Footer - HOVER BEHAVIOR */}
+        {/* Uses onMouseEnter/Leave to expand/collapse. Replaced button with div for handle. */}
+        <footer 
+            onMouseEnter={() => setIsFooterExpanded(true)}
+            onMouseLeave={() => setIsFooterExpanded(false)}
+            className={`flex-none shrink-0 z-40 bg-white border-t border-slate-200 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden transition-all duration-500 ease-in-out ${
+                isFooterExpanded ? 'max-h-[220px]' : 'max-h-[32px]'
+            }`}
+        >
+            {/* Trigger Strip (Visual Only - No Click) */}
+            <div
+                className="h-[32px] w-full flex items-center justify-center bg-slate-50 border-b border-slate-100 group cursor-help"
+            >
+               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors uppercase tracking-wider">
+                  {isFooterExpanded ? (
+                    <>
+                      <ChevronDown size={12} /> Tutup Informasi
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp size={12} /> Info Pengembang
+                    </>
+                  )}
+               </div>
             </div>
             
             {/* Expanded Content */}
-            <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+            <div className={`max-w-7xl mx-auto px-6 py-6 flex flex-col items-center justify-center text-center transition-opacity duration-300 ${
+                isFooterExpanded ? 'opacity-100 delay-100' : 'opacity-0'
+            }`}>
                 <p className="text-[11px] text-slate-600 font-medium">
                     Developer : <span className="font-bold text-slate-800">Bakti Siregar, MSC., CDS.</span> © {new Date().getFullYear()} SPM~ITSB. All Rights Reserved.
                 </p>

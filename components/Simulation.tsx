@@ -1,7 +1,7 @@
 
 import { useState, useMemo, FC } from 'react';
 import { AuditSession, AuditQuestion, UserRole } from '../types';
-import { Calculator, Award, RefreshCw, AlertTriangle, Info } from 'lucide-react';
+import { Calculator, Award, RefreshCw, AlertTriangle, Info, Edit3 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { useMasterData } from '../MasterDataContext';
 
@@ -13,9 +13,10 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
   const { currentUser } = useAuth();
   const { units } = useMasterData();
   const [selectedAuditId, setSelectedAuditId] = useState<string>('');
+  
   // Local override state for "What-If" analysis
-  // Key: questionId, Value: overridden compliance status
-  const [overrides, setOverrides] = useState<Record<string, 'Compliant' | 'Non-Compliant' | 'Observation' | null>>({});
+  // Key: questionId, Value: overridden status (string) OR specific score (number)
+  const [overrides, setOverrides] = useState<Record<string, 'Compliant' | 'Non-Compliant' | 'Observation' | number | null>>({});
 
   // Filter Audits based on Role
   const visibleAudits = useMemo(() => {
@@ -48,10 +49,19 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
 
   const selectedAudit = visibleAudits.find(a => a.id === selectedAuditId);
 
-  // Helper to get effective status (Override > Real > Null)
-  const getEffectiveStatus = (q: AuditQuestion) => {
+  // Helper to get effective value (Override > Real > Null)
+  const getEffectiveValue = (q: AuditQuestion) => {
     if (overrides[q.id] !== undefined) return overrides[q.id];
     return q.compliance; // Default to actual auditor finding
+  };
+
+  // Helper to convert status/number to Score Float
+  const getNumericScore = (val: string | number | null | undefined): number => {
+    if (typeof val === 'number') return val;
+    if (val === 'Compliant') return 4.0;
+    if (val === 'Observation') return 3.0;
+    if (val === 'Non-Compliant') return 2.0;
+    return 0;
   };
 
   // Calculation Logic (Simplified GPA 4.0 Scale)
@@ -62,16 +72,15 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
     let count = 0;
 
     selectedAudit.questions.forEach(q => {
-      const status = getEffectiveStatus(q);
-      if (status) {
-        count++;
-        // Scoring Model:
-        // Compliant = 4.0
-        // Observation = 3.0
-        // Non-Compliant = 2.0
-        if (status === 'Compliant') totalScore += 4;
-        else if (status === 'Observation') totalScore += 3;
-        else if (status === 'Non-Compliant') totalScore += 2;
+      const val = getEffectiveValue(q);
+      
+      // Only count if it has a value (either simulated or actual)
+      if (val !== null && val !== undefined) {
+        const score = getNumericScore(val);
+        if (score > 0) {
+            totalScore += score;
+            count++;
+        }
       }
     });
 
@@ -110,14 +119,46 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
     setOverrides({});
   };
 
-  const toggleOverride = (qId: string, currentStatus: any) => {
+  const toggleOverride = (qId: string, currentValue: any) => {
+    // If currently a number (manual), switch to Compliant
+    if (typeof currentValue === 'number') {
+        setOverrides(prev => ({ ...prev, [qId]: 'Compliant' }));
+        return;
+    }
+
     // Cycle: Compliant -> Obs -> NC -> Compliant
     let nextStatus: any = 'Compliant';
-    if (currentStatus === 'Compliant') nextStatus = 'Observation';
-    else if (currentStatus === 'Observation') nextStatus = 'Non-Compliant';
-    else if (currentStatus === 'Non-Compliant') nextStatus = 'Compliant';
+    if (currentValue === 'Compliant') nextStatus = 'Observation';
+    else if (currentValue === 'Observation') nextStatus = 'Non-Compliant';
+    else if (currentValue === 'Non-Compliant') nextStatus = 'Compliant';
     
     setOverrides(prev => ({ ...prev, [qId]: nextStatus }));
+  };
+
+  const handleManualScoreChange = (qId: string, inputValue: string) => {
+    // Jika kosong, hapus override (kembali ke default)
+    if (inputValue === '') {
+        const newOverrides = { ...overrides };
+        delete newOverrides[qId];
+        setOverrides(newOverrides);
+        return;
+    }
+
+    const num = parseFloat(inputValue);
+    
+    // Validasi: Harus Angka & Range 2.0 - 4.0
+    if (!isNaN(num)) {
+        if (num >= 2.0 && num <= 4.0) {
+            setOverrides(prev => ({ ...prev, [qId]: num }));
+        } else {
+            // Optional: User feedback or just ignore invalid input
+            // For strict UI, we just don't update state if out of bounds
+            // But to allow typing (e.g. typing "3." before "5"), we might handle onBlur.
+            // Here we strictly check bounds for the final state.
+            if (num > 4.0) setOverrides(prev => ({ ...prev, [qId]: 4.0 }));
+            if (num < 2.0) setOverrides(prev => ({ ...prev, [qId]: 2.0 }));
+        }
+    }
   };
 
   // Grouping for UI
@@ -202,6 +243,10 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
                                 <span className="font-medium text-slate-600">Non-Compliant (TM)</span>
                                 <span className="font-bold text-red-600">Skor 2.0</span>
                             </div>
+                             <div className="flex justify-between items-center bg-white p-2 rounded border border-blue-100">
+                                <span className="font-medium text-slate-600">Input Manual</span>
+                                <span className="font-bold text-purple-600">2.00 - 4.00</span>
+                            </div>
                             <p className="text-[10px] text-blue-600/80 mt-2 italic">
                                 *Predikat 'Unggul' membutuhkan skor rata-rata minimal 3.61.
                             </p>
@@ -279,11 +324,12 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
                              </div>
                              <div className="divide-y divide-slate-100">
                                  {items.map(q => {
-                                     const status = getEffectiveStatus(q);
+                                     const value = getEffectiveValue(q);
+                                     const numericScore = getNumericScore(value);
                                      const isOverridden = overrides[q.id] !== undefined;
 
                                      return (
-                                         <div key={q.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-slate-50 transition-colors group">
+                                         <div key={q.id} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-colors group">
                                              <div className="flex-1">
                                                  <div className="flex items-center gap-2 mb-1">
                                                      <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200">{q.id}</span>
@@ -292,29 +338,53 @@ const Simulation: FC<SimulationProps> = ({ audits }) => {
                                                  <p className="text-sm text-slate-800 font-medium">{q.questionText}</p>
                                              </div>
                                              
-                                             <div className="flex items-center gap-4">
-                                                 <div className="text-xs text-right hidden sm:block">
+                                             <div className="flex items-center gap-4 bg-slate-50/50 p-2 rounded-lg border border-slate-100 md:border-none md:bg-transparent md:p-0">
+                                                 {/* Numeric Score Display */}
+                                                 <div className="text-xs text-right min-w-[50px]">
                                                      <p className="text-slate-400">Nilai</p>
-                                                     <p className={`font-bold ${
-                                                         status === 'Compliant' ? 'text-green-600' :
-                                                         status === 'Observation' ? 'text-amber-600' :
-                                                         status === 'Non-Compliant' ? 'text-red-600' : 'text-slate-300'
+                                                     <p className={`font-bold text-lg ${
+                                                         numericScore >= 3.5 ? 'text-green-600' :
+                                                         numericScore >= 3.0 ? 'text-amber-600' :
+                                                         numericScore > 0 ? 'text-red-600' : 'text-slate-300'
                                                      }`}>
-                                                         {status === 'Compliant' ? '4.0' : status === 'Observation' ? '3.0' : status === 'Non-Compliant' ? '2.0' : '-'}
+                                                         {numericScore > 0 ? numericScore.toFixed(2) : '-'}
                                                      </p>
                                                  </div>
+
+                                                 {/* Standard Toggle Button */}
                                                  <button 
-                                                    onClick={() => toggleOverride(q.id, status)}
-                                                    className={`px-4 py-2 rounded-lg text-xs font-bold border min-w-[120px] transition-all shadow-sm active:scale-95 ${
-                                                        status === 'Compliant' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' :
-                                                        status === 'Observation' ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' :
-                                                        status === 'Non-Compliant' ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' :
+                                                    onClick={() => toggleOverride(q.id, value)}
+                                                    className={`px-3 py-2 rounded-lg text-xs font-bold border w-[110px] transition-all shadow-sm active:scale-95 text-center truncate ${
+                                                        typeof value === 'number' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                        value === 'Compliant' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' :
+                                                        value === 'Observation' ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' :
+                                                        value === 'Non-Compliant' ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' :
                                                         'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
                                                     }`}
-                                                    title="Klik untuk mengubah simulasi nilai item ini"
+                                                    title="Klik untuk mengubah status (Siklus: Compliant -> Obs -> NC)"
                                                  >
-                                                     {status || 'Belum Dinilai'}
+                                                     {typeof value === 'number' ? 'Custom' : (value || 'Belum Dinilai')}
                                                  </button>
+
+                                                 {/* Manual Input Field */}
+                                                 <div className="flex flex-col items-end">
+                                                    <span className="text-[9px] text-slate-400 mb-0.5 uppercase font-bold tracking-wider">Manual</span>
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="number"
+                                                            min="2.00"
+                                                            max="4.00"
+                                                            step="0.01"
+                                                            className="w-20 text-right px-2 py-1.5 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="0.00"
+                                                            value={typeof value === 'number' ? value : ''}
+                                                            onChange={(e) => handleManualScoreChange(q.id, e.target.value)}
+                                                        />
+                                                        {typeof value === 'number' && (
+                                                           <Edit3 size={10} className="absolute left-2 top-2.5 text-purple-400 pointer-events-none" />
+                                                        )}
+                                                    </div>
+                                                 </div>
                                              </div>
                                          </div>
                                      );
